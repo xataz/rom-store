@@ -1,0 +1,109 @@
+name: Tests, build et release Linux x86_64
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# Ne pas interrompre une publication lorsqu'un autre commit est poussé.
+concurrency:
+  group: ci-${{ forgejo.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux-x86_64:
+    # Adapter ce label à celui déclaré par le runner Docker sur Codeberg.
+    runs-on: docker
+    container:
+      image: docker.io/library/node:22-bookworm
+    timeout-minutes: 60
+    env:
+      CARGO_HOME: /root/.cargo
+      RUSTUP_HOME: /root/.rustup
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Vérifier l'architecture et installer les dépendances
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl git make pkg-config python3 \
+            libsdl2-dev fonts-dejavu-core
+
+      - name: Récupérer les sources
+        uses: https://code.forgejo.org/actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Cache des dépendances Cargo
+        uses: https://code.forgejo.org/actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            /root/.cargo/registry
+            /root/.cargo/git
+          key: cargo-bookworm-x86_64-rust-1.90.0-${{ hashFiles('client/Cargo.lock', 'server/Cargo.lock') }}
+
+      - name: Installer Rust 1.90.0
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            https://sh.rustup.rs --output /tmp/rustup-init.sh
+          sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain 1.90.0 \
+            --component rustfmt --component clippy
+          echo /root/.cargo/bin >> "$GITHUB_PATH"
+
+      - name: Vérifier le formatage et Clippy
+        run: |
+          set -euo pipefail
+          for crate in client server; do
+            cargo fmt --manifest-path "$crate/Cargo.toml" -- --check
+            cargo clippy --locked --manifest-path "$crate/Cargo.toml" --all-targets -- -D warnings
+          done
+
+      - name: Tester les outils de release et l'interface web
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
+          node --test server/tests/admin_ui.test.mjs
+
+      - name: Tests unitaires et d'intégration Rust
+        run: make test
+
+      - name: Compiler les binaires de release
+        run: make build
+
+      - name: Tests de bout en bout avec le client de release
+        run: |
+          ROMSTORE_CLIENT="$PWD/client/target/release/romstore-client" \
+            cargo test --locked --manifest-path server/Cargo.toml --test e2e -- --ignored
+
+      - name: Tester SDL sans écran
+        env:
+          SDL_VIDEODRIVER: dummy
+        run: |
+          set -euo pipefail
+          client/target/release/romstore-client --smoke-test
+          cargo test --locked --manifest-path client/Cargo.toml --bin romstore-client \
+            sdl_text_rendering_refreshes_density_on_resize_and_bounds_the_cache -- --ignored
+
+      - name: Préparer les archives du tag
+        if: forgejo.event_name == 'push' && startsWith(forgejo.ref, 'refs/tags/v')
+        env:
+          RELEASE_TAG: ${{ forgejo.ref_name }}
+        run: python3 scripts/ci/package.py "$RELEASE_TAG"
+
+      # Le jeton n'est transmis au script que pour un push de tag, jamais pour une PR.
+      - name: Publier la release Codeberg
+        if: forgejo.event_name == 'push' && startsWith(forgejo.ref, 'refs/tags/v')
+        env:
+          FORGEJO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORGEJO_SERVER_URL: ${{ forgejo.server_url }}
+          FORGEJO_REPOSITORY: ${{ forgejo.repository }}
+          RELEASE_TAG: ${{ forgejo.ref_name }}
+          RELEASE_SHA: ${{ forgejo.sha }}
+        run: python3 scripts/ci/publish.py

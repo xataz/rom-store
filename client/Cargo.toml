@@ -1,0 +1,21 @@
+[package]
+name = "romstore-client"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+
+[dependencies]
+anyhow = "1"
+fontdue = "0.9"
+fs2 = "0.4"
+hex = "0.4"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "pnm", "webp"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+sdl2 = "0.38"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "time"] }
+serde-saphyr = { version = "2.1", default-features = false, features = ["deserialize"] }
+xmltree = { version = "0.11", features = ["attribute-order"] }

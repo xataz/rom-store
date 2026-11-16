@@ -1,0 +1,10 @@
+server_url: "http://127.0.0.1:8000"
+# Ne jamais installer dans test/library : c'est la bibliothèque source.
+roms_dir: ".romstore/test/installed"
+cache_dir: ".romstore/test/cache"
+fullscreen: false
+language: fr
+games_view: grid
+systems_view: grid
+frontend: none
+auto_refresh: false

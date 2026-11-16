@@ -1,0 +1,129 @@
+tagline: DEIN NÄCHSTES ABENTEUER WARTET
+nav_platforms: 01  Plattformen
+nav_transfers: 02  Downloads
+active_transfers: "{0} wartend / aktiv"
+systems_eyebrow: DEINE BIBLIOTHEK / ENTDECKEN
+systems_title: Wähle deine Welt.
+platform_count: "{0} Plattformen"
+connecting_library: Verbindung zur Bibliothek…
+collection_starts: Deine Sammlung beginnt hier.
+systems_empty_help: Verfügbare Plattformen erscheinen hier. Bei einem Verbindungsfehler versuche es mit der Eingabetaste erneut.
+games_discover: "{0} Spiele entdecken"
+your_turn: DU BIST DRAN
+games_available: "{0} installierbare Spiele · ROMs, Medien und Metadaten"
+explore_collection: Sammlung entdecken  →
+games: Spiele
+collection_eyebrow: PLATTFORMEN / SPIELE
+catalog_unavailable: Der Katalog ist nicht verfügbar.
+catalog_retry: Kehre zu den Plattformen zurück und öffne diese Sammlung erneut.
+no_games: Hier gibt es noch keine Spiele.
+no_games_help: Wähle eine andere Plattform oder füge Spiele zum Serverkatalog hinzu.
+catalog_position: "{0} / {1} Spiele"
+loading_more: Weitere Spiele werden geladen…
+scroll_retry: "{0} — Zum Wiederholen weiter scrollen"
+rom_media: ROM + MEDIEN
+unsupported_format: Nicht unterstütztes Format
+unsupported_multifile: Mehrteiliges Format nicht unterstützt
+unsupported_badge: NICHT UNTERSTÜTZTES FORMAT
+view_details: Eingabe  →  Spieldetails
+detail_eyebrow: "PLATTFORMEN / {0} / SPIELDETAILS"
+story_title: Hier beginnt die Geschichte.
+no_description: Dieses Spiel hat noch keine Beschreibung.
+developer: ENTWICKLER
+players: SPIELER
+unknown: Nicht angegeben
+files_summary: "{0} Dateien · {1} MiB · ROM und Medien enthalten"
+install_game: Dieses Spiel installieren
+install_unavailable: Installation nicht verfügbar
+install_key: EINGABE / A   →
+transfers_eyebrow: DEINE BIBLIOTHEK / DOWNLOADS
+transfers_title: Deine nächsten Abenteuer.
+completed_count: "{0} / {1} abgeschlossen"
+queue_empty: Alles beginnt mit einem Spiel.
+queue_empty_help: Öffne die Spieldetails und bestätige, um ein Spiel einzureihen. Während der Installation kannst du die Sammlung weiter durchstöbern.
+installed: INSTALLIERT
+cancelled: ABGEBROCHEN
+failed: FEHLER
+cancelling: WIRD ABGEBROCHEN
+in_progress: LÄUFT
+waiting: WARTET
+transfer_amount: "{0} / {1} MiB"
+transfer_done: Übertragung abgeschlossen
+transfer_interrupted: Übertragung unterbrochen
+transfer_pending: Wartet auf den Start
+transfer_speed: "{0} MiB/s im Durchschnitt"
+collection_accessible: Mit Tab zurück zur Sammlung.
+navigate: Navigieren
+enter_key: Eingabe / A
+install: Installieren
+choose: Auswählen
+escape_key: Esc / B
+quit: Beenden
+back: Zurück
+queue: Warteschlange
+platforms: Plattformen
+reload: Neu laden
+reloading_catalog: Katalog wird auf dem Server indexiert…
+reload_complete: "Katalog neu geladen: {0} Plattformen · {1} Spiele · {2} Warnungen"
+reload_failed: "Neuladen fehlgeschlagen: {0}"
+cancel_key: Entf / Y
+cancel: Abbrechen
+platform_placeholder: DEIN NÄCHSTES ABENTEUER
+cover_placeholder: NOCH KEIN BILD
+connecting_server: Verbindung zum Server…
+loading_catalog: Katalog wird geladen…
+add_to_queue_hint: Bestätigen, um das Spiel einzureihen
+game_unavailable: Spiel nicht verfügbar
+already_queued: Dieses Spiel ist bereits eingereiht
+queued_hint: Eingereiht — mit Menü / Tab öffnen
+closing: "Beenden: Aufgaben werden abgebrochen, Schreibvorgänge werden abgeschlossen…"
+cancel_requested: Abbruch angefordert…
+empty_catalog: Leerer Katalog — gamelist.xml prüfen und zum Wiederholen bestätigen
+choose_system: Wähle eine Plattform
+retry_confirm: "{0} — mit Eingabe erneut versuchen"
+retry_back: "{0} — zurückgehen und erneut versuchen"
+navigation_hint: "Pfeile / Stick: fortlaufend scrollen — weitere Spiele werden automatisch geladen"
+installing: Installation läuft
+installed_hint: Installiert — die EmulationStation-Spielliste aktualisieren
+install_failed: "Installation fehlgeschlagen: {0}"
+cancelled_hint: Installation abgebrochen
+font_used: "Verwendete Schrift: {0}"
+no_font: "Keine nutzbare Schrift gefunden. DejaVu Sans oder Noto Sans installieren oder font_path festlegen. Geprüfte Pfade:\n{0}"
+usage: "romstore-client [--config datei.yaml] [--install GAME_ID | --recover journal.json] [--smoke-test [--screenshots ordner]]\nOhne Option: SDL2-Oberfläche. --install und --recover funktionieren ohne Anzeige."
+cli_progress: "{0} / {1} Bytes — {2}"
+progress_done: Installation abgeschlossen
+smoke_queue_hint: Die Installation läuft während des Durchstöberns weiter.
+grid_view: COVER-ANSICHT
+list_view: LISTE + DETAILS
+change_view: Ansicht
+info: Infos
+quick_actions: "A / Eingabe: Details"
+details: Details
+uninstall: Deinstallieren
+uninstall_game: Dieses Spiel deinstallieren
+uninstall_hint: Zum Deinstallieren bestätigen — eine Rückfrage folgt
+uninstalling: Deinstallation läuft
+uninstalled: DEINSTALLIERT
+uninstalled_hint: Deinstalliert — EmulationStation-Spieleliste aktualisieren
+uninstall_failed: "Deinstallation fehlgeschlagen: {0}"
+uninstall_job: "Deinstallieren: {0}"
+uninstall_preserved: Nur lokale ROM + XML-Eintrag · Medien und Spielstände bleiben erhalten.
+uninstall_confirm_title: Dieses Spiel deinstallieren?
+uninstall_confirm_body: Die ROM wird aus dem ROM-Ordner dieses Clients gelöscht und ihr gamelist.xml-Eintrag entfernt. Medien und Spielstände bleiben erhalten.
+uninstall_confirm_controls: "← →: wählen · A / Eingabe: bestätigen · B / Esc: abbrechen"
+operation_pending: Vorgang bereits vorgemerkt / aktiv
+screenshot: BILDSCHIRMFOTO
+screenshot_missing: KEIN BILDSCHIRMFOTO
+game_facts: "Entwickler: {0} · Spieler: {1}"
+search: Suche
+search_title: Spiele suchen
+all_platforms: Alle Plattformen
+search_platform: "Plattform: {0}"
+space_key: Leer
+clear_search: Löschen
+search_keyboard_hint: "Tippen oder A: Zeichen · X: löschen · Start/Eingabe: suchen · B/Esc: schließen"
+search_scope_hint: "Tab / Y: diese oder alle Plattformen · Entf: Eingabe leeren"
+search_global_hint: "Suche auf allen Plattformen · Entf: Eingabe leeren"
+search_results: "SUCHE: {0}"
+search_no_results: "Keine Spiele für „{0}“."
+search_empty_help: Mit F / L3 die Suche ändern oder den Text leeren, um wieder alle Spiele anzuzeigen.

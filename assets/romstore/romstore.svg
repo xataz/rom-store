@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>ROM Store</title>
+  <desc>Une cartouche rétro et une flèche de téléchargement menthe sur fond bleu nuit.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#243953"/>
+      <stop offset="1" stop-color="#101b2c"/>
+    </linearGradient>
+    <linearGradient id="cartridge" x1="0" y1="0" x2="0.8" y2="1">
+      <stop stop-color="#92f1cf"/>
+      <stop offset="1" stop-color="#4cc49c"/>
+    </linearGradient>
+    <linearGradient id="label" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#243953"/>
+      <stop offset="1" stop-color="#18283d"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#background)"/>
+  <rect x="24" y="24" width="464" height="464" rx="100" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="2"/>
+  <circle cx="256" cy="248" r="181" fill="none" stroke="#83e5c1" stroke-opacity="0.08" stroke-width="2"/>
+  <circle cx="256" cy="248" r="151" fill="#83e5c1" fill-opacity="0.035"/>
+  <path d="M172 100h168v24h30a18 18 0 0 1 18 18v236a24 24 0 0 1-24 24H148a24 24 0 0 1-24-24V142a18 18 0 0 1 18-18h30z" fill="#050c16" fill-opacity="0.25" transform="translate(0 10)"/>
+  <path d="M172 94h168v24h30a18 18 0 0 1 18 18v236a24 24 0 0 1-24 24H148a24 24 0 0 1-24-24V136a18 18 0 0 1 18-18h30z" fill="url(#cartridge)"/>
+  <path d="M190 96v28h132V96" fill="#b7ffe3" fill-opacity="0.4"/>
+  <rect x="147" y="147" width="218" height="180" rx="18" fill="url(#label)"/>
+  <path d="M169 171h42m12 0h18" fill="none" stroke="#85e4c0" stroke-opacity="0.35" stroke-width="6" stroke-linecap="round"/>
+  <path d="M256 199v77m-30-28 30 30 30-30" fill="none" stroke="#e8fff5" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M207 282v15h98v-15" fill="none" stroke="#79deb9" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M164 351h184m-184 16h184" fill="none" stroke="#18384a" stroke-opacity="0.22" stroke-width="5" stroke-linecap="round"/>
+  <rect x="205" y="385" width="102" height="11" rx="4" fill="#173348"/>
+  <path d="M225 388v7m20-7v7m20-7v7m20-7v7" stroke="#e8c879" stroke-width="6"/>
+  <circle cx="109" cy="207" r="5" fill="#8aeac7" fill-opacity="0.65"/>
+  <circle cx="403" cy="314" r="5" fill="#8aeac7" fill-opacity="0.65"/>
+  <path d="M396 167h16m-8-8v16M101 330h12m-6-6v12" stroke="#8aeac7" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round"/>
+</svg>

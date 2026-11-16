@@ -1,0 +1,129 @@
+tagline: UNE NOUVELLE PARTIE VOUS ATTEND
+nav_platforms: 01  Plateformes
+nav_transfers: 02  Téléchargements
+active_transfers: "{0} en attente / en cours"
+systems_eyebrow: VOTRE BIBLIOTHÈQUE / EXPLORER
+systems_title: Choisissez votre univers.
+platform_count: "{0} plateformes"
+connecting_library: Connexion à votre bibliothèque…
+collection_starts: Votre collection commence ici.
+systems_empty_help: Les plateformes disponibles apparaîtront ici. Si la connexion a échoué, appuyez sur Entrée pour réessayer.
+games_discover: "{0} jeux à découvrir"
+your_turn: À VOUS DE JOUER
+games_available: "{0} jeux installables · ROMs, médias et métadonnées"
+explore_collection: Explorer la collection  →
+games: Jeux
+collection_eyebrow: PLATEFORMES / JEUX
+catalog_unavailable: Le catalogue est indisponible.
+catalog_retry: Revenez aux plateformes, puis réessayez d'ouvrir cette collection.
+no_games: Pas encore de jeu ici.
+no_games_help: Choisissez une autre plateforme ou ajoutez des jeux au catalogue du serveur.
+catalog_position: "{0} / {1} jeux"
+loading_more: Chargement de la suite…
+scroll_retry: "{0} — Continuez à défiler pour réessayer"
+rom_media: ROM + MÉDIAS
+unsupported_format: Format non pris en charge
+unsupported_multifile: Format multi-fichiers non pris en charge
+unsupported_badge: FORMAT NON PRIS EN CHARGE
+view_details: Entrée  →  Voir la fiche
+detail_eyebrow: "PLATEFORMES / {0} / FICHE DU JEU"
+story_title: L'histoire commence ici.
+no_description: Ce jeu n'a pas encore de description.
+developer: DÉVELOPPEUR
+players: JOUEURS
+unknown: Non renseigné
+files_summary: "{0} fichiers · {1} Mio · ROM et médias inclus"
+install_game: Installer ce jeu
+install_unavailable: Installation indisponible
+install_key: ENTRÉE / A   →
+transfers_eyebrow: VOTRE BIBLIOTHÈQUE / TRANSFERTS
+transfers_title: Les prochaines parties.
+completed_count: "{0} / {1} terminées"
+queue_empty: Tout commence par un jeu.
+queue_empty_help: Ouvrez une fiche et validez pour ajouter un jeu à la file. Vous pourrez continuer à parcourir la collection pendant l'installation.
+installed: INSTALLÉ
+cancelled: ANNULÉ
+failed: ÉCHEC
+cancelling: ANNULATION
+in_progress: EN COURS
+waiting: EN ATTENTE
+transfer_amount: "{0} / {1} Mio"
+transfer_done: Transfert terminé
+transfer_interrupted: Transfert interrompu
+transfer_pending: Démarrage à venir
+transfer_speed: "{0} Mio/s en moyenne"
+collection_accessible: La collection reste accessible avec Tab.
+navigate: Naviguer
+enter_key: Entrée / A
+install: Installer
+choose: Choisir
+escape_key: Échap / B
+quit: Quitter
+back: Retour
+queue: Téléchargements
+platforms: Plateformes
+reload: Recharger
+reloading_catalog: Indexation du catalogue en cours sur le serveur…
+reload_complete: "Catalogue rechargé : {0} plateformes · {1} jeux · {2} avertissements"
+reload_failed: "Échec du rechargement : {0}"
+cancel_key: Suppr / Y
+cancel: Annuler
+platform_placeholder: VOTRE PROCHAINE AVENTURE
+cover_placeholder: VISUEL À VENIR
+connecting_server: Connexion au serveur…
+loading_catalog: Chargement du catalogue…
+add_to_queue_hint: Valider pour ajouter à la file de téléchargements
+game_unavailable: Jeu indisponible
+already_queued: Ce jeu est déjà dans la file
+queued_hint: Ajouté à la file — ouvrir avec Menu / Tab
+closing: "Fermeture : annulation des tâches, attente de la fin des écritures…"
+cancel_requested: Annulation demandée…
+empty_catalog: Catalogue vide — vérifier les gamelist.xml, puis Valider pour réessayer
+choose_system: Choisir une plateforme
+retry_confirm: "{0} — Valider pour réessayer"
+retry_back: "{0} — Retour puis réessayer"
+navigation_hint: "Flèches / stick : défilement continu — les jeux suivants se chargent automatiquement"
+installing: Installation en cours
+installed_hint: Installé — rafraîchir la liste EmulationStation
+install_failed: "Échec de l'installation : {0}"
+cancelled_hint: Installation annulée
+font_used: "Police utilisée : {0}"
+no_font: "Aucune police utilisable. Installer DejaVu Sans ou Noto Sans, ou définir font_path. Chemins essayés :\n{0}"
+usage: "romstore-client [--config fichier.yaml] [--install GAME_ID | --recover journal.json] [--smoke-test [--screenshots dossier]]\nSans option : interface SDL2. --install et --recover fonctionnent sans écran."
+cli_progress: "{0} / {1} octets — {2}"
+progress_done: Installation terminée
+smoke_queue_hint: Les installations continuent pendant la navigation.
+grid_view: VUE JAQUETTES
+list_view: LISTE + DÉTAILS
+change_view: Vue
+info: Infos
+quick_actions: "A / Entrée : fiche"
+details: Fiche
+uninstall: Désinstaller
+uninstall_game: Désinstaller ce jeu
+uninstall_hint: Valider pour désinstaller ce jeu — une confirmation sera demandée
+uninstalling: Désinstallation en cours
+uninstalled: DÉSINSTALLÉ
+uninstalled_hint: Désinstallé — rafraîchir la liste EmulationStation
+uninstall_failed: "Échec de la désinstallation : {0}"
+uninstall_job: "Désinstaller : {0}"
+uninstall_preserved: ROM locale + entrée XML uniquement · médias et sauvegardes conservés.
+uninstall_confirm_title: Désinstaller ce jeu ?
+uninstall_confirm_body: La ROM sera supprimée du dossier ROMs du client et son entrée retirée de gamelist.xml. Les médias et les sauvegardes seront conservés.
+uninstall_confirm_controls: "← → : choisir · A / Entrée : valider · B / Échap : annuler"
+operation_pending: Opération déjà en attente / en cours
+screenshot: CAPTURE D'ÉCRAN
+screenshot_missing: AUCUNE CAPTURE
+game_facts: "Développeur : {0} · Joueurs : {1}"
+search: Recherche
+search_title: Rechercher des jeux
+all_platforms: Toutes les plateformes
+search_platform: "Plateforme : {0}"
+space_key: Espace
+clear_search: Eff.
+search_keyboard_hint: "Saisie clavier ou A : caractère · X : effacer · Start/Entrée : chercher · B/Échap : fermer"
+search_scope_hint: "Tab / Y : cette plateforme ou toutes · Suppr : vider la saisie"
+search_global_hint: "Recherche sur toutes les plateformes · Suppr : vider la saisie"
+search_results: "RECHERCHE : {0}"
+search_no_results: "Aucun jeu pour « {0} »."
+search_empty_help: Appuyez sur F / L3 pour modifier la recherche ou effacer le texte et retrouver tous les jeux.

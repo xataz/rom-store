@@ -1,0 +1,129 @@
+tagline: YOUR NEXT ADVENTURE STARTS HERE
+nav_platforms: 01  Platforms
+nav_transfers: 02  Downloads
+active_transfers: "{0} queued / active"
+systems_eyebrow: YOUR LIBRARY / EXPLORE
+systems_title: Choose your universe.
+platform_count: "{0} platforms"
+connecting_library: Connecting to your library…
+collection_starts: Your collection starts here.
+systems_empty_help: Available platforms will appear here. If the connection failed, press Enter to retry.
+games_discover: "{0} games to discover"
+your_turn: YOUR TURN TO PLAY
+games_available: "{0} installable games · ROMs, media and metadata"
+explore_collection: Explore the collection  →
+games: Games
+collection_eyebrow: PLATFORMS / GAMES
+catalog_unavailable: The catalogue is unavailable.
+catalog_retry: Return to platforms, then try opening this collection again.
+no_games: No games here yet.
+no_games_help: Choose another platform or add games to the server catalogue.
+catalog_position: "{0} / {1} games"
+loading_more: Loading more games…
+scroll_retry: "{0} — Keep scrolling to retry"
+rom_media: ROM + MEDIA
+unsupported_format: Unsupported format
+unsupported_multifile: Multi-file format not supported
+unsupported_badge: UNSUPPORTED FORMAT
+view_details: Enter  →  Game details
+detail_eyebrow: "PLATFORMS / {0} / GAME DETAILS"
+story_title: The story starts here.
+no_description: This game has no description yet.
+developer: DEVELOPER
+players: PLAYERS
+unknown: Not specified
+files_summary: "{0} files · {1} MiB · ROM and media included"
+install_game: Install this game
+install_unavailable: Installation unavailable
+install_key: ENTER / A   →
+transfers_eyebrow: YOUR LIBRARY / TRANSFERS
+transfers_title: Your next adventures.
+completed_count: "{0} / {1} completed"
+queue_empty: It all starts with a game.
+queue_empty_help: Open a game's details and confirm to add it to the queue. You can keep browsing the collection during installation.
+installed: INSTALLED
+cancelled: CANCELLED
+failed: FAILED
+cancelling: CANCELLING
+in_progress: IN PROGRESS
+waiting: QUEUED
+transfer_amount: "{0} / {1} MiB"
+transfer_done: Transfer completed
+transfer_interrupted: Transfer interrupted
+transfer_pending: Waiting to start
+transfer_speed: "{0} MiB/s on average"
+collection_accessible: Press Tab to return to the collection.
+navigate: Navigate
+enter_key: Enter / A
+install: Install
+choose: Select
+escape_key: Esc / B
+quit: Quit
+back: Back
+queue: Queue
+platforms: Platforms
+reload: Reload
+reloading_catalog: Catalogue indexing in progress on the server…
+reload_complete: "Catalogue reloaded: {0} platforms · {1} games · {2} warnings"
+reload_failed: "Reload failed: {0}"
+cancel_key: Del / Y
+cancel: Cancel
+platform_placeholder: YOUR NEXT ADVENTURE
+cover_placeholder: ARTWORK COMING SOON
+connecting_server: Connecting to the server…
+loading_catalog: Loading the catalogue…
+add_to_queue_hint: Confirm to add to the download queue
+game_unavailable: Game unavailable
+already_queued: This game is already queued
+queued_hint: Added to queue — open with Menu / Tab
+closing: "Closing: cancelling tasks and waiting for writes to finish…"
+cancel_requested: Cancellation requested…
+empty_catalog: Empty catalogue — check gamelist.xml files, then confirm to retry
+choose_system: Choose a platform
+retry_confirm: "{0} — press Enter to retry"
+retry_back: "{0} — go back and retry"
+navigation_hint: "Arrows / stick: continuous scrolling — more games load automatically"
+installing: Installing
+installed_hint: Installed — refresh the EmulationStation game list
+install_failed: "Installation failed: {0}"
+cancelled_hint: Installation cancelled
+font_used: "Using font: {0}"
+no_font: "No usable font found. Install DejaVu Sans or Noto Sans, or set font_path. Paths tried:\n{0}"
+usage: "romstore-client [--config file.yaml] [--install GAME_ID | --recover journal.json] [--smoke-test [--screenshots directory]]\nNo option: SDL2 interface. --install and --recover work without a display."
+cli_progress: "{0} / {1} bytes — {2}"
+progress_done: Installation completed
+smoke_queue_hint: Installations continue while you browse.
+grid_view: COVER VIEW
+list_view: LIST + DETAILS
+change_view: View
+info: Info
+quick_actions: "A / Enter: details"
+details: Details
+uninstall: Uninstall
+uninstall_game: Uninstall this game
+uninstall_hint: Confirm to uninstall this game — confirmation required
+uninstalling: Uninstalling
+uninstalled: UNINSTALLED
+uninstalled_hint: Uninstalled — refresh the EmulationStation game list
+uninstall_failed: "Uninstall failed: {0}"
+uninstall_job: "Uninstall: {0}"
+uninstall_preserved: Local ROM + XML entry only · artwork and saved games retained.
+uninstall_confirm_title: Uninstall this game?
+uninstall_confirm_body: The ROM will be deleted from this client's ROMs folder and its gamelist.xml entry removed. Artwork and saved games will be kept.
+uninstall_confirm_controls: "← →: choose · A / Enter: confirm · B / Esc: cancel"
+operation_pending: Operation already queued / in progress
+screenshot: SCREENSHOT
+screenshot_missing: NO SCREENSHOT
+game_facts: "Developer: {0} · Players: {1}"
+search: Search
+search_title: Search games
+all_platforms: All platforms
+search_platform: "Platform: {0}"
+space_key: Space
+clear_search: Clear
+search_keyboard_hint: "Type or A: character · X: erase · Start/Enter: search · B/Esc: close"
+search_scope_hint: "Tab / Y: this platform or all platforms · Delete: clear text"
+search_global_hint: "Search across all platforms · Delete: clear text"
+search_results: "SEARCH: {0}"
+search_no_results: "No games matching “{0}”."
+search_empty_help: Press F / L3 to edit the search, or clear the text to show all games again.

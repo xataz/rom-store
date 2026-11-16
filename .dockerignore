@@ -1,0 +1,12 @@
+**
+!client/
+!client/Cargo.toml
+!client/Cargo.lock
+!client/src/
+!client/src/**
+!client/locales/
+!client/locales/**
+!packaging/
+!packaging/batocera/
+!packaging/batocera/**
+**/__pycache__/

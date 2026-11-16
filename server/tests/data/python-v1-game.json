@@ -1,0 +1,21 @@
+{
+  "id": "d11024bc1dbd5b29be77a7707ffa565cacdda701f57564695995ea983e52e67e",
+  "system": "nes",
+  "path": "demo.nes",
+  "name": "Démo 🎮 & Mario",
+  "metadata": {
+    "name": "Démo 🎮 & Mario",
+    "desc": "Première ligne\nÉté ß \"test\"",
+    "image": "./images/demo.png",
+    "thumbnail": "./images/demo.png",
+    "custom": "kept"
+  },
+  "installable": true,
+  "unavailable_reason": null,
+  "files": [
+    {"id":"e86a7372798d4a72f0b1e11566b3b730459370fb536124440acf409fb2e30c2c","role":"rom","destination":"demo.nes","size":13,"sha256":"ec5c4d156b260955f966264a582a20fa1ce1754be604330be730ef20812bf138"},
+    {"id":"a0d00c5f9ed2839b86d559cfe92f2e452ae4d1974e73a19cb9d146a352d6eddf","role":"image","destination":"images/demo.png","size":15,"sha256":"bbb9a30ac377725931b09171c74994e4428edd32294adb6bf49285e786715299"},
+    {"id":"a0d00c5f9ed2839b86d559cfe92f2e452ae4d1974e73a19cb9d146a352d6eddf","role":"thumbnail","destination":"images/demo.png","size":15,"sha256":"bbb9a30ac377725931b09171c74994e4428edd32294adb6bf49285e786715299"}
+  ],
+  "revision": "2f18b038ad7cf3e8bc85997226b22a7abe1f906bc87913a50021d25cfb361a19"
+}

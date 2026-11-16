@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='utf-8'?>
+<gameList>
+  <game>
+    <path>./Orbital Quest.m3u</path>
+    <name>Orbital Quest</name>
+    <desc>Orbital Quest : jeu fictif de démonstration, non jouable. Permet de tester le catalogue, les téléchargements et le XML.</desc>
+    <developer>ROM Store Demo</developer>
+    <publisher>ROM Store Demo</publisher>
+    <genre>Demo</genre>
+    <players>1-2</players>
+    <rating>0.8</rating>
+    <releasedate>20000101T000000</releasedate>
+    <image>./images/Orbital Quest-image.png</image>
+    <thumbnail>./images/Orbital Quest-thumb.png</thumbnail>
+  </game>
+</gameList>

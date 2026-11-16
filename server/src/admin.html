@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ROM Store · Gestion</title>
+  <style>
+    :root { color-scheme: dark; font: 16px system-ui, sans-serif; background: #101520; color: #e6edf7; }
+    body { max-width: 880px; margin: 3rem auto; padding: 0 1.25rem; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+    h1 { margin-bottom: .3rem; } h2 { font-size: 1.2rem; }
+    a { color: #82bfff; } .muted { color: #a7b6cb; }
+    section { background: #1b2433; border: 1px solid #344057; border-radius: 12px; padding: 1.4rem; margin-top: 1.5rem; }
+    button { font: inherit; background: #8edbc3; color: #101520; border: 0; border-radius: 6px; padding: .7rem 1rem; cursor: pointer; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    #status { font-weight: 600; } #status[data-running="true"] { color: #f2ce7e; }
+    #error { color: #ffaaaa; } table { width: 100%; border-collapse: collapse; }
+    th, td { padding: .8rem .3rem; text-align: left; border-bottom: 1px solid #344057; }
+    th:not(:first-child), td:not(:first-child) { text-align: right; }
+    #issues td, #issues th { text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    select { font: inherit; max-width: 100%; padding: .5rem; margin-bottom: 1rem; }
+    .table-scroll { overflow-x: auto; } #issues { min-width: 600px; }
+    @media (max-width: 540px) { body { margin-top: 1rem; } header { align-items: start; flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <header><div><h1>ROM Store</h1><span class="muted">Gestion du catalogue</span></div><a href="/docs">Documentation API</a></header>
+  <section>
+    <h2>Indexation</h2>
+    <p id="status" role="status" aria-live="polite">Connexion au serveur…</p>
+    <p class="muted">L’analyse se fait en arrière-plan. Le catalogue précédent reste disponible jusqu’à la publication du nouveau. Au premier lancement, le catalogue est vide pendant l’analyse.</p>
+    <button id="reload" type="button" disabled>Relancer l’indexation</button>
+    <p id="error" role="alert" hidden></p>
+  </section>
+  <section>
+    <h2>ROMs par système</h2>
+    <p id="totals" class="muted">Chargement…</p>
+    <table><thead><tr><th>Système</th><th>ROMs</th><th>Installables</th></tr></thead><tbody id="systems"></tbody></table>
+    <p class="muted">Compteurs du dernier catalogue publié, actualisés automatiquement. Les jeux multidisques comptent pour une entrée.</p>
+  </section>
+  <section>
+    <h2>Anomalies du catalogue</h2>
+    <label for="issue-system">Système : </label><select id="issue-system"><option value="">Tous les systèmes</option></select>
+    <p id="issue-count" class="muted">Chargement…</p>
+    <div class="table-scroll"><table id="issues"><thead><tr><th>Système</th><th>Jeu / chemin XML</th><th>Type</th><th>Raison</th></tr></thead><tbody id="issue-rows"></tbody></table></div>
+    <p><button id="previous-issues" type="button" disabled>Précédent</button> <button id="next-issues" type="button" disabled>Suivant</button></p>
+    <p class="muted">Anomalies du dernier catalogue publié, y compris les entrées ignorées et les jeux non installables. Un jeu peut avoir plusieurs anomalies. Les anciens diagnostics génériques seront précisés à la prochaine indexation.</p>
+  </section>
+  <p class="muted">Accès réservé à un réseau de confiance : cette interface n’est pas authentifiée.</p>
+  <script>
+    'use strict';
+    const button = document.getElementById('reload');
+    const status = document.getElementById('status');
+    const error = document.getElementById('error');
+    const issueSystem = document.getElementById('issue-system');
+    const previousIssues = document.getElementById('previous-issues');
+    const nextIssues = document.getElementById('next-issues');
+    let issueOffset = 0;
+    const issueLimit = 50;
+    let filtersKey = '';
+    let busy = false;
+    let reloadRequested = false;
+    async function request(url, method = 'GET') {
+      const response = await fetch(url, {method, cache: 'no-store', signal: AbortSignal.timeout(20000)});
+      if (!response.ok) throw new Error(`Erreur serveur (${response.status})`);
+      return response.json();
+    }
+    function showState(state) {
+      const running = state.status === 'running';
+      button.disabled = running || reloadRequested;
+      status.dataset.running = String(running);
+      const labels = {
+        idle: 'Aucune indexation en cours.',
+        running: 'Indexation en cours…',
+        completed: `Indexation terminée : ${state.games} ROMs, ${state.systems} systèmes, ${state.diagnostics} avertissements.`,
+        failed: state.error || 'Échec de l’indexation.'
+      };
+      status.textContent = labels[state.status] || 'État inconnu';
+    }
+    function showSystems(systems) {
+      const rows = systems.map(system => {
+        const row = document.createElement('tr');
+        for (const value of [system.name, system.games, system.installable]) {
+          const cell = document.createElement('td');
+          cell.textContent = value;
+          row.append(cell);
+        }
+        return row;
+      });
+      document.getElementById('systems').replaceChildren(...rows);
+      const count = systems.reduce((total, system) => total + system.games, 0);
+      document.getElementById('totals').textContent = `${systems.length} systèmes · ${count} ROMs`;
+    }
+    function showIssues(page, systems) {
+      const ids = [...new Set([...systems.map(system => system.id), ...page.items.map(issue => issue.system), issueSystem.value].filter(Boolean))].sort();
+      const key = JSON.stringify(ids);
+      if (key !== filtersKey) {
+        const selected = issueSystem.value;
+        const options = ['', ...ids].map(id => {
+          const option = document.createElement('option');
+          option.value = id;
+          option.textContent = id || 'Tous les systèmes';
+          return option;
+        });
+        issueSystem.replaceChildren(...options);
+        issueSystem.value = selected;
+        filtersKey = key;
+      }
+      const rows = page.items.map(issue => {
+        const row = document.createElement('tr');
+        for (const value of [issue.system || '—', issue.name ? `${issue.name} (${issue.path})` : issue.path || 'gamelist.xml', issue.kind === 'unavailable' ? 'Non installable' : 'Avertissement', issue.message]) {
+          const cell = document.createElement('td');
+          cell.textContent = value;
+          row.append(cell);
+        }
+        return row;
+      });
+      document.getElementById('issue-rows').replaceChildren(...rows);
+      document.getElementById('issue-count').textContent = page.total
+        ? `${page.total} anomalies · ${page.offset + 1}–${Math.min(page.offset + page.limit, page.total)}`
+        : 'Aucune anomalie dans le catalogue publié.';
+      previousIssues.disabled = issueOffset === 0;
+      nextIssues.disabled = issueOffset + issueLimit >= page.total;
+    }
+    async function update(start = false) {
+      if (busy) {
+        // A click during a background check must not disappear or send two POSTs.
+        if (start) {
+          reloadRequested = true;
+          button.disabled = true;
+        }
+        return;
+      }
+      busy = true;
+      // Periodic GETs must leave the last known control state untouched.
+      if (start) button.disabled = true;
+      try {
+        const state = await request('/api/v1/catalog/reload', start ? 'POST' : 'GET');
+        const systems = await request('/api/v1/catalog/summary');
+        const params = new URLSearchParams({offset: String(issueOffset), limit: String(issueLimit)});
+        if (issueSystem.value) params.set('system', issueSystem.value);
+        let issues = await request(`/api/v1/catalog/issues?${params}`);
+        if (issueOffset > 0 && issueOffset >= issues.total) {
+          issueOffset = 0;
+          params.set('offset', '0');
+          issues = await request(`/api/v1/catalog/issues?${params}`);
+        }
+        showState(state);
+        showSystems(systems);
+        showIssues(issues, systems);
+        error.hidden = true;
+      } catch (reason) {
+        error.textContent = `Impossible d’actualiser la page : ${reason.message}. Nouvelle tentative automatique.`;
+        error.hidden = false;
+        button.disabled = true;
+      } finally {
+        busy = false;
+        if (reloadRequested) {
+          reloadRequested = false;
+          update(true);
+        }
+      }
+    }
+    button.addEventListener('click', () => update(true));
+    issueSystem.addEventListener('change', () => { if (!busy) { issueOffset = 0; update(); } });
+    previousIssues.addEventListener('click', () => { if (!busy) { issueOffset = Math.max(0, issueOffset - issueLimit); update(); } });
+    nextIssues.addEventListener('click', () => { if (!busy) { issueOffset += issueLimit; update(); } });
+    update();
+    setInterval(() => update(), 3000);
+  </script>
+</body>
+</html>

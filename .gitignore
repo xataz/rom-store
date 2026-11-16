@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+.ruff_cache/
+target/
+dist/
+.romstore/
+*.sqlite3*
+client/config.toml
+client/config.yaml
+client/config.yml
+cache/
+roms/
+fixtures/
+client/target/
+server/target/

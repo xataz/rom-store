@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gameList>
+  <game>
+    <path>./ROM Store.sh</path>
+    <name>ROM Store</name>
+    <desc>Parcourez votre catalogue de jeux et installez vos ROMs depuis votre serveur ROM Store, directement à la manette. Téléchargez les jeux, leurs médias et leurs métadonnées, puis gérez votre bibliothèque locale.</desc>
+    <image>./images/romstore.png</image>
+    <thumbnail>./images/romstore.png</thumbnail>
+    <genre>Utilitaire</genre>
+    <players>1</players>
+  </game>
+</gameList>

@@ -1,0 +1,28 @@
+server_url: "http://127.0.0.1:8000"
+roms_dir: "/userdata/roms"
+cache_dir: "/userdata/system/cache/romstore"
+# Langue de l'interface : fr (français), en (anglais), es (espagnol), de (allemand).
+language: fr
+# Vues initiales : grid (jaquettes) ou list (liste avec détails).
+# V / clic stick droit change la vue pendant la session, sans réécrire ce fichier.
+games_view: grid
+systems_view: list
+# Frontend local : none, batocera, esde (ou es-de), recalbox, emulationstation, custom.
+frontend: batocera
+# Mapping facultatif des noms serveur vers les dossiers locaux (tous frontends).
+# system_mapping:
+#   gamecube: gc
+#   sg1000: sg-1000
+# Avec frontend: esde, renseigner obligatoirement ces deux racines :
+# media_dir: "/home/votre-utilisateur/ES-DE/downloaded_media"
+# gamelists_dir: "/home/votre-utilisateur/ES-DE/gamelists"
+# Les sous-dossiers système (ex. gc) sont ajoutés automatiquement.
+# Refresh des jeux à la fermeture normale, après les écritures locales.
+auto_refresh: true
+# Pour ES-DE, utiliser auto_refresh: false sauf commande adaptée ci-dessous.
+# Facultatif : exécutable local et arguments, sans interprétation par un shell.
+# Requis si auto_refresh est activé pour un frontend autre que Batocera.
+# refresh_command: ["/chemin/vers/mon-script-de-refresh", "argument"]
+# Facultatif : police essayée en premier, puis recherche automatique si inutilisable.
+font_path: "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+fullscreen: true

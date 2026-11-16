@@ -1,0 +1,129 @@
+tagline: TU PRÓXIMA AVENTURA EMPIEZA AQUÍ
+nav_platforms: 01  Plataformas
+nav_transfers: 02  Descargas
+active_transfers: "{0} en cola / activas"
+systems_eyebrow: TU BIBLIOTECA / EXPLORAR
+systems_title: Elige tu universo.
+platform_count: "{0} plataformas"
+connecting_library: Conectando con tu biblioteca…
+collection_starts: Tu colección empieza aquí.
+systems_empty_help: Las plataformas disponibles aparecerán aquí. Si falla la conexión, pulsa Intro para reintentar.
+games_discover: "{0} juegos por descubrir"
+your_turn: TE TOCA JUGAR
+games_available: "{0} juegos instalables · ROMs, medios y metadatos"
+explore_collection: Explorar la colección  →
+games: Juegos
+collection_eyebrow: PLATAFORMAS / JUEGOS
+catalog_unavailable: El catálogo no está disponible.
+catalog_retry: Vuelve a las plataformas e intenta abrir esta colección de nuevo.
+no_games: Todavía no hay juegos aquí.
+no_games_help: Elige otra plataforma o añade juegos al catálogo del servidor.
+catalog_position: "{0} / {1} juegos"
+loading_more: Cargando más juegos…
+scroll_retry: "{0} — Sigue desplazándote para reintentar"
+rom_media: ROM + MEDIOS
+unsupported_format: Formato no compatible
+unsupported_multifile: Formato de varios archivos no compatible
+unsupported_badge: FORMATO NO COMPATIBLE
+view_details: Intro  →  Ver detalles
+detail_eyebrow: "PLATAFORMAS / {0} / DETALLES"
+story_title: La historia empieza aquí.
+no_description: Este juego aún no tiene descripción.
+developer: DESARROLLADOR
+players: JUGADORES
+unknown: Sin especificar
+files_summary: "{0} archivos · {1} MiB · ROM y medios incluidos"
+install_game: Instalar este juego
+install_unavailable: Instalación no disponible
+install_key: INTRO / A   →
+transfers_eyebrow: TU BIBLIOTECA / DESCARGAS
+transfers_title: Tus próximas aventuras.
+completed_count: "{0} / {1} finalizadas"
+queue_empty: Todo empieza con un juego.
+queue_empty_help: Abre los detalles de un juego y confirma para añadirlo a la cola. Puedes seguir explorando la colección durante la instalación.
+installed: INSTALADO
+cancelled: CANCELADO
+failed: ERROR
+cancelling: CANCELANDO
+in_progress: EN CURSO
+waiting: EN COLA
+transfer_amount: "{0} / {1} MiB"
+transfer_done: Transferencia finalizada
+transfer_interrupted: Transferencia interrumpida
+transfer_pending: Pendiente de inicio
+transfer_speed: "{0} MiB/s de media"
+collection_accessible: Pulsa Tab para volver a la colección.
+navigate: Navegar
+enter_key: Intro / A
+install: Instalar
+choose: Elegir
+escape_key: Esc / B
+quit: Salir
+back: Volver
+queue: Cola
+platforms: Plataformas
+reload: Recargar
+reloading_catalog: Indexación del catálogo en curso en el servidor…
+reload_complete: "Catálogo recargado: {0} plataformas · {1} juegos · {2} avisos"
+reload_failed: "Error al recargar: {0}"
+cancel_key: Supr / Y
+cancel: Cancelar
+platform_placeholder: TU PRÓXIMA AVENTURA
+cover_placeholder: IMAGEN NO DISPONIBLE
+connecting_server: Conectando con el servidor…
+loading_catalog: Cargando el catálogo…
+add_to_queue_hint: Confirma para añadir a la cola de descargas
+game_unavailable: Juego no disponible
+already_queued: Este juego ya está en la cola
+queued_hint: Añadido a la cola — abrir con Menú / Tab
+closing: "Cerrando: cancelando tareas y esperando a que terminen las escrituras…"
+cancel_requested: Cancelación solicitada…
+empty_catalog: Catálogo vacío — revisa los archivos gamelist.xml y confirma para reintentar
+choose_system: Elige una plataforma
+retry_confirm: "{0} — pulsa Intro para reintentar"
+retry_back: "{0} — vuelve atrás y reintenta"
+navigation_hint: "Flechas / stick: desplazamiento continuo — los juegos se cargan automáticamente"
+installing: Instalando
+installed_hint: Instalado — actualiza la lista de juegos de EmulationStation
+install_failed: "Error de instalación: {0}"
+cancelled_hint: Instalación cancelada
+font_used: "Fuente utilizada: {0}"
+no_font: "No se encontró una fuente válida. Instala DejaVu Sans o Noto Sans, o configura font_path. Rutas probadas:\n{0}"
+usage: "romstore-client [--config archivo.yaml] [--install GAME_ID | --recover diario.json] [--smoke-test [--screenshots carpeta]]\nSin opciones: interfaz SDL2. --install y --recover funcionan sin pantalla."
+cli_progress: "{0} / {1} bytes — {2}"
+progress_done: Instalación finalizada
+smoke_queue_hint: Las instalaciones continúan mientras navegas.
+grid_view: VISTA DE PORTADAS
+list_view: LISTA + DETALLES
+change_view: Vista
+info: Info
+quick_actions: "A / Intro: ficha"
+details: Ficha
+uninstall: Desinstalar
+uninstall_game: Desinstalar este juego
+uninstall_hint: Confirma para desinstalar este juego — se pedirá confirmación
+uninstalling: Desinstalando
+uninstalled: DESINSTALADO
+uninstalled_hint: Desinstalado — actualiza la lista de EmulationStation
+uninstall_failed: "Error al desinstalar: {0}"
+uninstall_job: "Desinstalar: {0}"
+uninstall_preserved: Solo ROM local + entrada XML · imágenes y partidas conservadas.
+uninstall_confirm_title: ¿Desinstalar este juego?
+uninstall_confirm_body: Se eliminarán la ROM de la carpeta de ROMs del cliente y su entrada en gamelist.xml. Se conservarán las imágenes y las partidas guardadas.
+uninstall_confirm_controls: "← →: elegir · A / Intro: confirmar · B / Esc: cancelar"
+operation_pending: Operación ya en espera / en curso
+screenshot: CAPTURA DE PANTALLA
+screenshot_missing: SIN CAPTURA
+game_facts: "Desarrollador: {0} · Jugadores: {1}"
+search: Buscar
+search_title: Buscar juegos
+all_platforms: Todas las plataformas
+search_platform: "Plataforma: {0}"
+space_key: Espacio
+clear_search: Borrar
+search_keyboard_hint: "Escribe o A: carácter · X: borrar · Start/Intro: buscar · B/Esc: cerrar"
+search_scope_hint: "Tab / Y: esta plataforma o todas · Supr: vaciar el texto"
+search_global_hint: "Buscar en todas las plataformas · Supr: vaciar el texto"
+search_results: "BÚSQUEDA: {0}"
+search_no_results: "No hay juegos para «{0}»."
+search_empty_help: Pulsa F / L3 para cambiar la búsqueda o borra el texto para ver todos los juegos.
