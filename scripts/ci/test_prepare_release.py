@@ -1,5 +1,6 @@
 import contextlib
 import io
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -12,6 +13,12 @@ import prepare_release
 
 class PrepareReleaseTests(unittest.TestCase):
     def setUp(self):
+        environment = patch.dict(os.environ, {
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+        })
+        environment.start()
+        self.addCleanup(environment.stop)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
@@ -93,6 +100,89 @@ class PrepareReleaseTests(unittest.TestCase):
         for filename in ("Cargo.toml", "Cargo.lock"):
             self.assertIn('version = "0.1.1"', (self.root / "client" / filename).read_text())
         self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_signs_commit_and_tag_with_configured_key_even_when_signing_is_disabled(self):
+        self.git("config", "user.signingkey", "TEST-GPG-KEY")
+        signing_calls = []
+
+        def signed(root, *args, **kwargs):
+            if args[:2] in (("git", "commit"), ("git", "tag")) and "-m" in args:
+                signing_calls.append(args)
+                # Exercer Git réellement, mais sans clé privée dans les tests.
+                args = tuple(arg for arg in args if not arg.startswith(
+                    ("--gpg-sign=", "--local-user=")))
+            return self.fake_run(root, *args, **kwargs)
+
+        output = self.prepare(runner=signed)
+        self.assertIn("seront signés", output)
+        self.assertEqual(len(signing_calls), 2)
+        self.assertIn("--gpg-sign=TEST-GPG-KEY", signing_calls[0])
+        self.assertIn("--local-user=TEST-GPG-KEY", signing_calls[1])
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertEqual(self.git("tag", "--list"), "client-v0.2.0")
+
+    def test_no_explicit_key_keeps_existing_git_signing_behavior(self):
+        calls = []
+
+        def record(root, *args, **kwargs):
+            calls.append(args)
+            return self.fake_run(root, *args, **kwargs)
+
+        output = self.prepare(runner=record)
+        self.assertNotIn("seront signés", output)
+        for args in calls:
+            self.assertFalse(any(arg.startswith(("--gpg-sign", "--local-user", "--no-gpg-sign"))
+                                 for arg in args))
+
+    def test_signing_key_uses_global_configuration_and_local_override(self):
+        global_config = self.root / "global.gitconfig"
+        with patch.dict(os.environ, {"GIT_CONFIG_GLOBAL": str(global_config)}):
+            self.git("config", "--global", "user.signingkey", "GLOBAL-KEY")
+            self.assertEqual(prepare_release.signing_key(self.root), "GLOBAL-KEY")
+            self.git("config", "user.signingkey", "LOCAL-KEY")
+            self.assertEqual(prepare_release.signing_key(self.root), "LOCAL-KEY")
+            self.git("config", "user.signingkey", "")
+            self.assertEqual(prepare_release.signing_key(self.root), "")
+
+    def assert_signing_failure(self, operation):
+        self.git("config", "user.signingkey", "UNAVAILABLE-KEY")
+        attempts = []
+
+        def fail(root, *args, **kwargs):
+            if args[:2] in (("git", "commit"), ("git", "tag")) and "-m" in args:
+                attempts.append(args)
+                if args[1] == operation:
+                    raise subprocess.CalledProcessError(128, args)
+                args = tuple(arg for arg in args if not arg.startswith("--gpg-sign="))
+            return self.fake_run(root, *args, **kwargs)
+
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.prepare(runner=fail)
+        self.assertEqual(self.git("tag", "--list"), "")
+        self.assertEqual(sum(args[1] == operation for args in attempts), 1)
+        if operation == "commit":
+            self.assertIn("--gpg-sign=UNAVAILABLE-KEY", attempts[-1])
+            self.assertEqual(self.git("rev-parse", "HEAD"), self.head)
+        else:
+            self.assertIn("--local-user=UNAVAILABLE-KEY", attempts[-1])
+            self.assertNotEqual(self.git("rev-parse", "HEAD"), self.head)
+
+    def test_commit_signing_failure_does_not_retry_unsigned_or_create_tag(self):
+        self.assert_signing_failure("commit")
+
+    def test_tag_signing_failure_keeps_commit_without_retrying_unsigned(self):
+        self.assert_signing_failure("tag")
+
+    def test_signing_config_error_stops_before_changing_files(self):
+        def fail(root, *args, **kwargs):
+            if args[:3] == ("git", "config", "--get"):
+                raise subprocess.CalledProcessError(128, args)
+            return self.fake_run(root, *args, **kwargs)
+
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.prepare(runner=fail)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertEqual(self.cargo_calls, [])
 
     def test_rejects_invalid_types_before_modifying_anything(self):
         for release_type in ("", "patch", "MINOR", "0.2.0", "fix;echo bad"):

@@ -23,6 +23,16 @@ def run(root, *args, capture=False, quiet=False):
     ).stdout
 
 
+def signing_key(root):
+    """Lit la configuration effective, sans confondre clé absente et erreur Git."""
+    try:
+        return run(root, "git", "config", "--get", "user.signingkey", capture=True).strip()
+    except subprocess.CalledProcessError as error:
+        if error.returncode == 1:
+            return ""
+        raise
+
+
 def update_manifest(text, version):
     """Change uniquement package.version en conservant le formatage du manifeste."""
     section = re.search(r"(?ms)^\[package\][ \t]*\n.*?(?=^\[|\Z)", text)
@@ -76,8 +86,11 @@ def prepare(root, component, release_type, cargo="cargo"):
     tag = f"{component}-v{version}"
     if run(root, "git", "tag", "--list", tag, capture=True).strip():
         raise ValueError(f"Le tag {tag} existe déjà localement")
+    key = signing_key(root)
 
     print(f"Release {component} ({release_type}) : {current} → {version}", flush=True)
+    if key:
+        print("Le commit et le tag seront signés avec la clé configurée dans Git.", flush=True)
     (root / manifest).write_text(update_manifest(text, version), encoding="utf-8")
     print(f"Mise à jour de {lock}…", flush=True)
     # Contrairement à generate-lockfile, metadata réutilise les versions verrouillées.
@@ -95,8 +108,11 @@ def prepare(root, component, release_type, cargo="cargo"):
         raise ValueError("Des fichiers autres que le manifeste et le lock ont changé ; vérifier git status")
     message = f"chore({component}): prépare la version {version}"
     run(root, "git", "add", "--", manifest, lock)
-    run(root, "git", "commit", "-m", message)
-    run(root, "git", "tag", "-a", tag, "-m", f"ROM Store {component.title()} {version}")
+    commit_signing = [f"--gpg-sign={key}"] if key else []
+    tag_signing = [f"--local-user={key}"] if key else []
+    run(root, "git", "commit", *commit_signing, "-m", message)
+    run(root, "git", "tag", *tag_signing, "-a", tag,
+        "-m", f"ROM Store {component.title()} {version}")
     print(f"\nRelease {tag} préparée localement. Aucun push effectué.")
     print("Après vérification, publier avec :")
     print(f"  git push origin {shlex.quote(branch)}")

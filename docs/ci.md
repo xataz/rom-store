@@ -115,6 +115,11 @@ Le script `scripts/ci/prepare_release.py` :
 3. Vérifie le formatage, Clippy (`--all-targets`, avertissements interdits)
    et les tests Rust non ignorés du composant. Clippy et les tests gardent `--locked`.
 4. Crée le commit contenant le manifeste et le lock, puis le tag annoté correspondant.
+   Si `user.signingkey` est renseigné dans la configuration Git effective (locale
+   ou globale), signe **le commit et le tag** avec cette clé, même si
+   `commit.gpgsign` ou `tag.gpgsign` vaut `false`. Git conserve ses réglages de
+   signature (`gpg.format`, programme GPG, agent et demande de phrase secrète).
+   Sans clé explicite, le comportement habituel de Git est conservé.
 5. Affiche les deux commandes de push à exécuter après vérification.
 
 **Aucun push n'est automatique.** Vérifier notamment `git show HEAD` et le tag,
@@ -129,6 +134,7 @@ le problème et terminer manuellement, ou revenir explicitement à un état prop
 avant de relancer. Si Git échoue lors du commit ou du tag (par exemple à cause
 d'un hook ou d'une signature), inspecter aussi `git log` et `git tag --list` :
 un commit peut déjà avoir été créé. Le script ne supprime ni commit ni tag.
+Une signature en échec bloque la préparation, sans tentative de repli non signée.
 
 ### Préparation manuelle
 

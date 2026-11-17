@@ -131,6 +131,7 @@ gp32: GP32
 nds: Nintendo DS
 psp: PlayStation Portable
 3ds: Nintendo 3DS
+switch: Nintendo Switch
 psvita: PlayStation_Vita
 arduboy: Arduboy
 
