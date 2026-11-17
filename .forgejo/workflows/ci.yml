@@ -4,6 +4,15 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      component:
+        description: Composant à compiler et tester (sans publication)
+        type: choice
+        default: all
+        options:
+          - all
+          - client
+          - server
 
 # Ne pas interrompre une publication lorsqu'un autre commit est poussé.
 concurrency:
@@ -26,14 +35,40 @@ jobs:
       run:
         shell: bash
     steps:
+      - name: Sélectionner le composant
+        id: component
+        env:
+          EVENT_NAME: ${{ forgejo.event_name }}
+          EVENT_REF: ${{ forgejo.ref }}
+          REQUESTED_COMPONENT: ${{ inputs.component }}
+        run: |
+          set -euo pipefail
+          component=all
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            component="${REQUESTED_COMPONENT:-all}"
+          elif [ "$EVENT_NAME" = push ]; then
+            case "$EVENT_REF" in
+              refs/tags/client-v*) component=client ;;
+              refs/tags/server-v*) component=server ;;
+            esac
+          fi
+          case "$component" in
+            all|client|server) ;;
+            *) echo "Composant invalide : $component" >&2; exit 1 ;;
+          esac
+          echo "CI_COMPONENT=$component" >> "$GITHUB_ENV"
+          echo "name=$component" >> "$GITHUB_OUTPUT"
+
       - name: Vérifier l'architecture et installer les dépendances
         run: |
           set -euo pipefail
           test "$(uname -m)" = x86_64
           apt-get update
           apt-get install -y --no-install-recommends \
-            build-essential ca-certificates curl git make pkg-config python3 \
-            libsdl2-dev fonts-dejavu-core
+            build-essential ca-certificates curl git make pkg-config python3
+          if [ "$CI_COMPONENT" != server ]; then
+            apt-get install -y --no-install-recommends libsdl2-dev fonts-dejavu-core
+          fi
 
       - name: Récupérer les sources
         uses: https://code.forgejo.org/actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -60,29 +95,40 @@ jobs:
       - name: Vérifier le formatage et Clippy
         run: |
           set -euo pipefail
-          for crate in client server; do
+          crates="$CI_COMPONENT"
+          if [ "$crates" = all ]; then crates='client server'; fi
+          for crate in $crates; do
             cargo fmt --manifest-path "$crate/Cargo.toml" -- --check
             cargo clippy --locked --manifest-path "$crate/Cargo.toml" --all-targets -- -D warnings
           done
 
-      - name: Tester les outils de release et l'interface web
+      - name: Tester les outils de release
+        run: python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
+
+      - name: Tester l'interface web du serveur
+        if: steps.component.outputs.name != 'client'
+        run: node --test server/tests/admin_ui.test.mjs
+
+      - name: Tests unitaires et d'intégration Rust du composant
         run: |
           set -euo pipefail
-          python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
-          node --test server/tests/admin_ui.test.mjs
-
-      - name: Tests unitaires et d'intégration Rust
-        run: make test
+          if [ "$CI_COMPONENT" = all ]; then
+            make test
+          else
+            make "test-$CI_COMPONENT"
+          fi
 
       - name: Compiler les binaires de release
-        run: make build
+        run: make "$CI_COMPONENT"
 
       - name: Tests de bout en bout avec le client de release
+        if: steps.component.outputs.name == 'all'
         run: |
           ROMSTORE_CLIENT="$PWD/client/target/release/romstore-client" \
             cargo test --locked --manifest-path server/Cargo.toml --test e2e -- --ignored
 
       - name: Tester SDL sans écran
+        if: steps.component.outputs.name != 'server'
         env:
           SDL_VIDEODRIVER: dummy
         run: |
@@ -91,15 +137,15 @@ jobs:
           cargo test --locked --manifest-path client/Cargo.toml --bin romstore-client \
             sdl_text_rendering_refreshes_density_on_resize_and_bounds_the_cache -- --ignored
 
-      - name: Préparer les archives du tag
-        if: forgejo.event_name == 'push' && startsWith(forgejo.ref, 'refs/tags/v')
+      - name: Préparer l'archive du composant
+        if: forgejo.event_name == 'push' && (startsWith(forgejo.ref, 'refs/tags/client-v') || startsWith(forgejo.ref, 'refs/tags/server-v'))
         env:
           RELEASE_TAG: ${{ forgejo.ref_name }}
         run: python3 scripts/ci/package.py "$RELEASE_TAG"
 
       # Le jeton n'est transmis au script que pour un push de tag, jamais pour une PR.
       - name: Publier la release Codeberg
-        if: forgejo.event_name == 'push' && startsWith(forgejo.ref, 'refs/tags/v')
+        if: forgejo.event_name == 'push' && (startsWith(forgejo.ref, 'refs/tags/client-v') || startsWith(forgejo.ref, 'refs/tags/server-v'))
         env:
           FORGEJO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORGEJO_SERVER_URL: ${{ forgejo.server_url }}

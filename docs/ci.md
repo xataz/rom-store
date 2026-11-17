@@ -19,7 +19,7 @@ permet à Forgejo d'utiliser ses propres workflows à la place de `.github`.
    cache doit être configuré et accessible depuis les conteneurs pour l'action cache.
 
 L'image de job est explicitement définie : **Debian 12 Bookworm, Node 22**, avec
-installation de **Rust 1.90.0**, Clippy, rustfmt et SDL2. L'installation des paquets
+installation de **Rust 1.90.0**, Clippy, rustfmt et, pour le client, SDL2. L'installation des paquets
 s'effectue en root **dans le conteneur**, pas sur l'hôte ; aucun mode privilégié
 ni montage du socket Docker dans le job n'est nécessaire.
 
@@ -31,27 +31,45 @@ Ne jamais placer de jeton directement dans le YAML ou les scripts.
 
 ## Ce qui s'exécute
 
-À chaque **push**, **pull request** et lancement manuel :
+Les deux composants ont des versions et des releases indépendantes :
+
+| Événement | Composants testés et compilés | Publication |
+|---|---|---|
+| Push de branche / pull request | Client et serveur, avec E2E | Non |
+| Push de `client-vX.Y.Z` | Client uniquement, avec tests SDL | Release client |
+| Push de `server-vX.Y.Z` | Serveur uniquement, avec tests WebUI | Release serveur |
+| Lancement manuel | Choix `all`, `client` ou `server` | Non |
+
+Les anciens tags communs `vX.Y.Z` ne publient plus de release. Les autres tags
+exécutent les vérifications des deux composants, sans publication.
+
+Pour les composants sélectionnés :
 
 - vérification de l'architecture x86_64 ;
 - formatage Rust et Clippy, avec avertissements traités comme erreurs ;
-- tests des outils de release et du JavaScript de l'interface serveur ;
-- `make test` : tests unitaires et d'intégration Rust ;
-- `make build` : compilation du client et du serveur en release ;
-- tests E2E ignorés par défaut, avec le véritable client de release ;
-- test de rendu SDL sans écran et test de densité du texte.
+- tests des outils de release, et du JavaScript si le serveur est sélectionné ;
+- tests unitaires et d'intégration Rust (`make test-client`, `make test-server` ou `make test`) ;
+- compilation en release (`make client`, `make server` ou `make all`) ;
+- tests E2E ignorés par défaut, avec le véritable client de release, **si les deux
+  composants sont sélectionnés** ;
+- test de rendu SDL sans écran et test de densité du texte si le client est sélectionné.
+
+Une release serveur ne nécessite donc ni compilation du client ni SDL2. Une release
+client ne nécessite pas de compiler le serveur. Les tests de compatibilité E2E sont
+conservés sur les branches/PR et les lancements manuels `all`, mais ne bloquent pas
+une release indépendante sur la compilation de l'autre composant.
 
 Les étapes s'arrêtent au premier échec. Les dépendances téléchargées par Cargo
 sont mises en cache ; les répertoires `target` ne le sont pas. Aucun ancien outil
 de packaging Batocera absent du dépôt n'est appelé.
 
-Sur un **push de tag commençant par `v`**, après ces vérifications :
+Sur un **push de tag `client-v…` ou `server-v…`**, après ces vérifications :
 
-1. Vérification du tag : il doit correspondre aux versions des **deux** `Cargo.toml`.
-2. Vérification des binaires ELF64 x86_64, puis création des deux archives.
-3. Création d'une release en **brouillon** et téléversement des trois fichiers.
+1. Vérification du tag : il doit correspondre à la version du **seul composant ciblé**.
+2. Vérification du binaire ELF64 x86_64, puis création de son archive.
+3. Création d'une release en **brouillon** et téléversement de l'archive et de `SHA256SUMS`.
 4. Publication uniquement une fois tous les fichiers envoyés. Un tag avec suffixe
-   comme `v0.2.0-rc.1` produit une prérelease.
+   comme `client-v0.2.0-rc.1` produit une prérelease.
 
 Un lancement manuel, même sur un tag, ne publie pas de release. Une pull request
 ne déclenche jamais les étapes de publication ; le checkout ne conserve pas ses
@@ -60,23 +78,31 @@ et ne pas approuver aveuglément les workflows provenant de forks.
 
 ## Publier une version
 
-Mettre à jour `package.version` dans `client/Cargo.toml` et `server/Cargo.toml`,
-puis actualiser et committer les deux `Cargo.lock` avec les manifestes.
+Mettre à jour `package.version` dans le `Cargo.toml` du composant concerné,
+puis actualiser et committer **son** `Cargo.lock` avec le manifeste. La version
+de l'autre composant reste inchangée. Par exemple, un client `0.2.0` peut coexister
+avec un serveur `0.1.3` ; leur compatibilité dépend du contrat de l'API, pas de
+l'égalité de leurs versions. L'interface du client affiche automatiquement sa
+version de compilation, issue de `client/Cargo.toml`, dans un petit encadré d'en-tête.
 Le tag doit pointer sur le commit contenant également le workflow et les scripts.
-Exemple pour la version `0.1.0` :
+Exemple pour publier uniquement le client `0.1.0` :
 
 ```bash
-git tag -a v0.1.0 -m 'ROM Store 0.1.0'
-git push origin v0.1.0
+git tag -a client-v0.1.0 -m 'ROM Store Client 0.1.0'
+git push origin client-v0.1.0
 ```
 
 Après réussite, la release Codeberg contient :
 
 ```text
 romstore-client-0.1.0-linux-x86_64.tar.gz
-romstore-server-0.1.0-linux-x86_64.tar.gz
 SHA256SUMS
 ```
+
+Pour le serveur, utiliser par exemple `server-v0.1.3`, avec `package.version = "0.1.3"`
+dans `server/Cargo.toml`. Sa release contiendra uniquement
+`romstore-server-0.1.3-linux-x86_64.tar.gz` et son propre `SHA256SUMS`.
+Les archives locales sont isolées dans `dist/client-v…/` et `dist/server-v…/`.
 
 Chaque archive contient un dossier versionné avec le binaire et la documentation ;
 celle du client inclut aussi `config.example.yaml`. Aucune configuration privée,
@@ -89,13 +115,15 @@ pour remplacer silencieusement ses binaires ; utiliser un nouveau numéro de ver
 
 ## Utiliser les archives
 
-Télécharger les **deux archives** et `SHA256SUMS` dans le même dossier :
+Télécharger l'archive et le `SHA256SUMS` de **la même release** dans un dossier :
 
 ```bash
 sha256sum -c SHA256SUMS
 tar -xzf romstore-client-0.1.0-linux-x86_64.tar.gz
-tar -xzf romstore-server-0.1.0-linux-x86_64.tar.gz
 ```
+
+Procéder de même pour une release serveur, de préférence dans un dossier distinct
+pour ne pas confondre les deux fichiers `SHA256SUMS`.
 
 Ce sont des binaires **dynamiques**, compilés sur Debian 12 : cible de base
 **glibc 2.36+**, avec les bibliothèques d'exécution système habituelles.
@@ -119,9 +147,13 @@ Python **3.11+** est requis uniquement pour ces outils CI, pas pour les binaires
 
 ```bash
 python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
-make build
-python3 scripts/ci/package.py v0.1.0
+make client
+python3 scripts/ci/package.py client-v0.1.0
+# Ou, indépendamment :
+make server
+python3 scripts/ci/package.py server-v0.1.0
 ```
 
-La dernière commande écrit dans `dist/v0.1.0/`, ignoré par Git, sans contacter
-Codeberg. Le script de publication n'est appelé que par l'étape dédiée du workflow.
+Ces commandes écrivent dans `dist/client-v0.1.0/` ou `dist/server-v0.1.0/`, ignorés
+par Git, sans contacter Codeberg. Adapter le tag à la version du manifeste concerné.
+Le script de publication n'est appelé que par l'étape dédiée du workflow.

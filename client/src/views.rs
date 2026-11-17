@@ -159,6 +159,12 @@ impl App {
             ui::rounded(canvas, Rect::new(x, y, 13, 13), 3, color)?;
         }
         painter.text(canvas, "ROM STORE", (88, 23), 27, TEXT, 300)?;
+        painter.pill(
+            canvas,
+            concat!("v", env!("CARGO_PKG_VERSION")),
+            (280, 28),
+            MUTED,
+        )?;
         painter.text(
             canvas,
             l.text(if self.reloading {

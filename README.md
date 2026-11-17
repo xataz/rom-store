@@ -556,8 +556,11 @@ La commande publie le nouvel index en une transaction SQLite et affiche les anom
 ## Tests et qualité
 
 Le pipeline **Codeberg / Forgejo Actions** teste et compile les deux applications
-sur Linux x86_64. Un push de tag `vX.Y.Z` publie ensuite les archives du client et
-du serveur avec leurs sommes SHA-256, uniquement si toutes les vérifications passent.
+sur Linux x86_64. Les tags `client-vX.Y.Z` et `server-vX.Y.Z` compilent, testent et
+publient indépendamment le composant concerné avec son archive et sa somme SHA-256.
+Les versions des deux applications peuvent différer ; un lancement manuel permet
+aussi de choisir le client, le serveur ou les deux. Le client affiche sa version
+dans un petit encadré de l'en-tête, automatiquement issu de son `Cargo.toml`.
 Voir [la configuration du runner et la procédure de release](docs/ci.md).
 
 ```bash

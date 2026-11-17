@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publie via l'API Forgejo, seulement après l'envoi complet des trois fichiers."""
+"""Publie un composant via l'API Forgejo après l'envoi de son archive et du SHA256."""
 
 import json
 import os
@@ -13,16 +13,16 @@ from package import ROOT, validate_tag
 
 
 def publish(root, server, repository, tag, sha, token):
-    version = validate_tag(root, tag)
+    crate, version = validate_tag(root, tag)
     if urlsplit(server).scheme != "https" or not token:
         raise ValueError("Une URL HTTPS et un jeton Forgejo sont requis")
     if len(repository.split("/")) != 2:
         raise ValueError("Dépôt attendu : propriétaire/nom")
     output = root / "dist" / tag
     files = [
-        output / f"romstore-{crate}-{version}-linux-x86_64.tar.gz"
-        for crate in ("client", "server")
-    ] + [output / "SHA256SUMS"]
+        output / f"romstore-{crate}-{version}-linux-x86_64.tar.gz",
+        output / "SHA256SUMS",
+    ]
     for path in files:
         if not path.is_file():
             raise ValueError(f"Fichier de release absent : {path}")
@@ -51,10 +51,10 @@ def publish(root, server, repository, tag, sha, token):
     release = request("POST", payload={
         "tag_name": tag,
         "target_commitish": sha,
-        "name": f"ROM Store {tag}",
-        "body": f"Binaires Linux x86_64 compilés et testés depuis `{sha}`.\n\n"
-                "Client : SDL2 2.26+ et police système nécessaires. "
-                "Binaires dynamiques compilés sous Debian 12 (glibc 2.36+).\n\n"
+        "name": f"ROM Store {crate.capitalize()} {version}",
+        "body": f"Binaire {crate} Linux x86_64 compilé et testé depuis `{sha}`.\n\n"
+                + ("Client : SDL2 2.26+ et police système nécessaires. " if crate == "client" else "")
+                + "Binaire dynamique compilé sous Debian 12 (glibc 2.36+).\n\n"
                 "Vérification : `sha256sum -c SHA256SUMS`. "
                 "Voir `docs/ci.md` dans les archives pour les instructions.",
         "draft": True,
