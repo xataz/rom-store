@@ -83,22 +83,34 @@ et ne pas approuver aveuglément les workflows provenant de forks.
 Depuis un dépôt propre, lancer la commande du composant concerné :
 
 ```bash
-make release-client VERSION=0.1.4
+make release-client TYPE=fix
 # Ou, indépendamment :
-make release-server VERSION=0.1.3
+make release-server TYPE=minor
 ```
 
 Ces commandes nécessitent Python **3.11+**, Git avec une identité de commit configurée,
 et l'environnement Rust habituel du composant (dont SDL2 pour le client).
-Le suffixe de prérelease est accepté, par exemple `VERSION=0.2.0-rc.1`.
+Le type est obligatoire ; la version est calculée depuis le `Cargo.toml` du
+composant sélectionné, sans modifier l'autre composant :
+
+| Type | Effet | Exemple depuis `1.2.3` |
+|---|---|---|
+| `fix` | Incrémente le correctif | `1.2.4` |
+| `minor` | Incrémente la mineure et remet le correctif à zéro | `1.3.0` |
+| `major` | Incrémente la majeure et remet mineure et correctif à zéro | `2.0.0` |
+
+Cette commande remplace l'ancien argument `VERSION=…`. Elle exige une version
+actuelle stable `X.Y.Z` ; pour une prérelease (`-rc.1`, par exemple), utiliser
+la préparation manuelle ci-dessous.
 `CARGO` et `PYTHON` peuvent être surchargés comme pour les autres cibles Make.
 
 Le script `scripts/ci/prepare_release.py` :
 
 1. Refuse les changements non committés, y compris les fichiers non suivis,
-   un HEAD détaché, une version invalide ou identique à la version actuelle,
+   un HEAD détaché, un type invalide ou une version actuelle non stable,
    et un tag déjà présent **localement**.
-2. Modifie uniquement `package.version` du composant et actualise son `Cargo.lock`
+2. Affiche la version actuelle et la version calculée, modifie uniquement
+   `package.version` du composant et actualise son `Cargo.lock`
    avec `cargo metadata`, en conservant les versions verrouillées des dépendances.
 3. Vérifie le formatage, Clippy (`--all-targets`, avertissements interdits)
    et les tests Rust non ignorés du composant. Clippy et les tests gardent `--locked`.

@@ -35,10 +35,10 @@ test-unit-server:
 	$(CARGO) test --locked --manifest-path server/Cargo.toml --lib --bins
 
 release-client:
-	$(PYTHON) scripts/ci/prepare_release.py client "$(VERSION)" --cargo "$(CARGO)"
+	$(PYTHON) scripts/ci/prepare_release.py client "$(TYPE)" --cargo "$(CARGO)"
 
 release-server:
-	$(PYTHON) scripts/ci/prepare_release.py server "$(VERSION)" --cargo "$(CARGO)"
+	$(PYTHON) scripts/ci/prepare_release.py server "$(TYPE)" --cargo "$(CARGO)"
 
 fixtures:
 	$(PYTHON) test/generate.py
@@ -63,5 +63,5 @@ help:
 	@echo 'make run-server    Servir la bibliothèque synthétique sur 127.0.0.1:8000'
 	@echo 'make run-client    Ouvrir le client avec la configuration de démonstration'
 	@echo 'make fixtures      Régénérer les données synthétiques (Python 3 requis)'
-	@echo 'make release-client VERSION=X.Y.Z  Préparer le commit et le tag client, sans push'
-	@echo 'make release-server VERSION=X.Y.Z  Préparer le commit et le tag serveur, sans push'
+	@echo 'make release-client TYPE=fix|minor|major  Préparer le commit et le tag client, sans push'
+	@echo 'make release-server TYPE=fix|minor|major  Préparer le commit et le tag serveur, sans push'

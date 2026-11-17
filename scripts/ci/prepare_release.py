@@ -12,8 +12,8 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 NUMBER = r"(?:0|[1-9][0-9]*)"
-IDENTIFIER = rf"(?:{NUMBER}|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)"
-VERSION = rf"{NUMBER}\.{NUMBER}\.{NUMBER}(?:-{IDENTIFIER}(?:\.{IDENTIFIER})*)?"
+VERSION = rf"({NUMBER})\.({NUMBER})\.({NUMBER})"
+RELEASE_TYPES = ("fix", "minor", "major")
 
 
 def run(root, *args, capture=False, quiet=False):
@@ -40,27 +40,44 @@ def update_manifest(text, version):
     return result
 
 
-def prepare(root, component, version, cargo="cargo"):
+def next_version(current, release_type):
+    """Incrémente une version stable en remettant les niveaux inférieurs à zéro."""
+    if release_type not in RELEASE_TYPES:
+        raise ValueError("TYPE attendu : fix, minor ou major")
+    match = re.fullmatch(VERSION, current) if isinstance(current, str) else None
+    if match is None:
+        raise ValueError("La version actuelle doit être stable au format X.Y.Z ; "
+                         "préparer les préreleases manuellement")
+    major, minor, fix = map(int, match.groups())
+    if release_type == "major":
+        return f"{major + 1}.0.0"
+    if release_type == "minor":
+        return f"{major}.{minor + 1}.0"
+    return f"{major}.{minor}.{fix + 1}"
+
+
+def prepare(root, component, release_type, cargo="cargo"):
     if component not in ("client", "server"):
         raise ValueError("Composant attendu : client ou server")
-    if not re.fullmatch(VERSION, version):
-        raise ValueError("VERSION attendue : X.Y.Z (suffixe -rc.1 accepté)")
+    if release_type not in RELEASE_TYPES:
+        raise ValueError("TYPE attendu : fix, minor ou major")
     cargo = shlex.split(cargo)
     if not cargo:
         raise ValueError("Commande Cargo vide")
-    tag = f"{component}-v{version}"
     manifest = f"{component}/Cargo.toml"
     lock = f"{component}/Cargo.lock"
     if run(root, "git", "status", "--porcelain", "--untracked-files=all", capture=True):
         raise ValueError("Le dépôt doit être propre, y compris les fichiers non suivis")
     branch = run(root, "git", "symbolic-ref", "--short", "HEAD", capture=True).strip()
-    if run(root, "git", "tag", "--list", tag, capture=True).strip():
-        raise ValueError(f"Le tag {tag} existe déjà localement")
     run(root, "git", "ls-files", "--error-unmatch", "--", manifest, lock, quiet=True)
     text = (root / manifest).read_text(encoding="utf-8")
-    if tomllib.loads(text)["package"]["version"] == version:
-        raise ValueError(f"Le composant est déjà en version {version}")
+    current = tomllib.loads(text)["package"]["version"]
+    version = next_version(current, release_type)
+    tag = f"{component}-v{version}"
+    if run(root, "git", "tag", "--list", tag, capture=True).strip():
+        raise ValueError(f"Le tag {tag} existe déjà localement")
 
+    print(f"Release {component} ({release_type}) : {current} → {version}", flush=True)
     (root / manifest).write_text(update_manifest(text, version), encoding="utf-8")
     print(f"Mise à jour de {lock}…", flush=True)
     # Contrairement à generate-lockfile, metadata réutilise les versions verrouillées.
@@ -89,11 +106,12 @@ def prepare(root, component, version, cargo="cargo"):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("component", choices=("client", "server"))
-    parser.add_argument("version", help="Version X.Y.Z ou X.Y.Z-rc.1")
+    parser.add_argument("release_type", choices=RELEASE_TYPES,
+                        help="fix : correctif, minor : version mineure, major : version majeure")
     parser.add_argument("--cargo", default="cargo", help="Commande Cargo à utiliser")
     args = parser.parse_args()
     try:
-        prepare(ROOT, args.component, args.version, args.cargo)
+        prepare(ROOT, args.component, args.release_type, args.cargo)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         print(f"Erreur : {error}", file=sys.stderr)
         print("Arrêt sans push ni annulation automatique. Vérifier git status et git log "

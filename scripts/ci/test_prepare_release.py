@@ -52,15 +52,16 @@ class PrepareReleaseTests(unittest.TestCase):
             lock = manifest.with_name("Cargo.lock")
             lock.write_text(lock.read_text().replace('version = "0.1.0"', f'version = "{version}"'))
 
-    def prepare(self, component="client", version="0.2.0", runner=None, cargo="cargo"):
+    def prepare(self, component="client", release_type="minor", runner=None, cargo="cargo"):
         output = io.StringIO()
         with patch("prepare_release.run", side_effect=runner or self.fake_run):
             with contextlib.redirect_stdout(output):
-                prepare_release.prepare(self.root, component, version, cargo)
+                prepare_release.prepare(self.root, component, release_type, cargo)
         return output.getvalue()
 
     def test_prepares_only_client_and_creates_annotated_tag_without_push(self):
         output = self.prepare()
+        self.assertIn("Release client (minor) : 0.1.0 → 0.2.0", output)
         self.assertIn("git push origin main", output)
         self.assertIn("git push origin client-v0.2.0", output)
         self.assertEqual(self.git("status", "--porcelain"), "")
@@ -78,17 +79,25 @@ class PrepareReleaseTests(unittest.TestCase):
         self.assertIn('version = "0.2.0" # Version', (self.root / "client/Cargo.toml").read_text())
         self.assertIn('example = { version = "1" }', (self.root / "client/Cargo.toml").read_text())
 
-    def test_prepares_server_prerelease_and_respects_cargo_override(self):
-        self.prepare("server", "0.2.0-rc.1", cargo="my-cargo +stable")
-        self.assertEqual(self.git("tag", "--list"), "server-v0.2.0-rc.1")
+    def test_prepares_server_major_and_respects_cargo_override(self):
+        self.prepare("server", "major", cargo="my-cargo +stable")
+        self.assertEqual(self.git("tag", "--list"), "server-v1.0.0")
         self.assertEqual(self.cargo_calls[0][:3], ("my-cargo", "+stable", "metadata"))
-        self.assertIn('version = "0.2.0-rc.1"', (self.root / "server/Cargo.lock").read_text())
+        self.assertIn('version = "1.0.0"', (self.root / "server/Cargo.lock").read_text())
+        self.assertEqual(self.git("show", "HEAD:client/Cargo.toml"),
+                         self.git("show", f"{self.head}:client/Cargo.toml"))
 
-    def test_rejects_invalid_versions_before_modifying_anything(self):
-        for version in ("", "v0.2.0", "0.2", "01.2.0", "0.2.0-01", "0.2.0-rc..1",
-                        "0.2.0+build", "0.2.0;echo bad"):
-            with self.subTest(version=version), self.assertRaises(ValueError):
-                self.prepare(version=version)
+    def test_prepares_client_fix(self):
+        self.prepare(release_type="fix")
+        self.assertEqual(self.git("tag", "--list"), "client-v0.1.1")
+        for filename in ("Cargo.toml", "Cargo.lock"):
+            self.assertIn('version = "0.1.1"', (self.root / "client" / filename).read_text())
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_rejects_invalid_types_before_modifying_anything(self):
+        for release_type in ("", "patch", "MINOR", "0.2.0", "fix;echo bad"):
+            with self.subTest(release_type=release_type), self.assertRaisesRegex(ValueError, "TYPE"):
+                self.prepare(release_type=release_type)
         self.assertEqual(self.git("status", "--porcelain"), "")
         self.assertEqual(self.cargo_calls, [])
 
@@ -99,10 +108,18 @@ class PrepareReleaseTests(unittest.TestCase):
         self.assertEqual(self.git("status", "--porcelain"), "")
         self.assertEqual(self.cargo_calls, [])
 
-    def test_rejects_same_version(self):
-        with self.assertRaisesRegex(ValueError, "déjà en version"):
-            self.prepare(version="0.1.0")
+    def test_rejects_current_prerelease_before_modifying_anything(self):
+        manifest = self.root / "client/Cargo.toml"
+        manifest.write_text(manifest.read_text().replace('"0.1.0"', '"0.2.0-rc.1"'))
+        self.git("add", "client/Cargo.toml")
+        self.git("commit", "-qm", "Prerelease")
+        head = self.git("rev-parse", "HEAD")
+        with self.assertRaisesRegex(ValueError, "stable"):
+            self.prepare()
+        self.assertEqual(self.git("rev-parse", "HEAD"), head)
         self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertEqual(self.git("tag", "--list"), "")
+        self.assertEqual(self.cargo_calls, [])
 
     def test_rejects_dirty_tracked_staged_and_untracked_files(self):
         manifest = self.root / "client/Cargo.toml"
@@ -163,6 +180,31 @@ class PrepareReleaseTests(unittest.TestCase):
         self.assertEqual(self.git("rev-parse", "HEAD"), self.head)
         self.assertEqual(self.git("tag", "--list"), "")
         self.assertTrue((self.root / "unexpected.txt").exists())
+
+
+class NextVersionTests(unittest.TestCase):
+    def test_increments_selected_level_and_resets_lower_levels(self):
+        cases = (
+            ("1.2.3", "fix", "1.2.4"),
+            ("1.2.3", "minor", "1.3.0"),
+            ("1.2.3", "major", "2.0.0"),
+            ("0.0.0", "fix", "0.0.1"),
+            ("0.1.9", "fix", "0.1.10"),
+            ("0.9.9", "minor", "0.10.0"),
+            ("9.9.9", "major", "10.0.0"),
+        )
+        for current, release_type, expected in cases:
+            with self.subTest(current=current, release_type=release_type):
+                self.assertEqual(prepare_release.next_version(current, release_type), expected)
+
+    def test_rejects_nonstable_or_invalid_current_versions(self):
+        for current in ("", "v0.2.0", "0.2", "01.2.0", "0.2.0-rc.1", "0.2.0+build", 1):
+            with self.subTest(current=current), self.assertRaisesRegex(ValueError, "stable"):
+                prepare_release.next_version(current, "fix")
+
+    def test_rejects_invalid_release_type(self):
+        with self.assertRaisesRegex(ValueError, "TYPE"):
+            prepare_release.next_version("1.2.3", "patch")
 
 
 if __name__ == "__main__":
