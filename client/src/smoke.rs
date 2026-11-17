@@ -150,23 +150,22 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
                 media('e', "fanart"),
             ]);
             app.systems = [
-                "NES",
-                "Super Nintendo",
-                "Mega Drive",
-                "PlayStation",
-                "Game Boy Advance",
-                "PC Engine",
-                "Neo Geo",
-                "Nintendo Entertainment System — nom très long",
+                ("nes", "NES"),
+                ("snes", "Super Nintendo"),
+                ("megadrive", "Mega Drive"),
+                ("psx", "PlayStation"),
+                ("gba", "Game Boy Advance"),
+                ("pcengine", "PC Engine"),
+                ("neogeo", "Neo Geo"),
+                (
+                    "demo-unknown",
+                    "Nintendo Entertainment System — nom très long",
+                ),
             ]
             .iter()
             .enumerate()
-            .map(|(index, name)| System {
-                id: if index == 0 {
-                    "nes".into()
-                } else {
-                    format!("system{index}")
-                },
+            .map(|(index, (id, name))| System {
+                id: (*id).into(),
                 name: (*name).into(),
                 game_count: 1280 + index as u64 * 82,
                 image: Some(media('c', "image")),

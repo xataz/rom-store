@@ -26,6 +26,12 @@ pub struct System {
     pub image: Option<File>,
 }
 
+impl System {
+    pub fn display_name(&self) -> &str {
+        crate::systems::display_name(&self.id, &self.name)
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct File {
     pub id: String,

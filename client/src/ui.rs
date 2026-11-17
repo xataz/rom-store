@@ -308,8 +308,21 @@ impl<'a> Painter<'a> {
         point: (i32, i32),
         color: Color,
     ) -> Result<u32> {
+        self.pill_bounded(canvas, label, point, color, u32::MAX)
+    }
+
+    pub fn pill_bounded(
+        &mut self,
+        canvas: &mut Canvas<Window>,
+        label: &str,
+        point: (i32, i32),
+        color: Color,
+        max_width: u32,
+    ) -> Result<u32> {
         let available = (1240 - point.0).max(24) as u32;
-        let width = (self.width(label, 14).ceil() as u32 + 24).min(available);
+        let width = (self.width(label, 14).ceil() as u32 + 24)
+            .min(available)
+            .min(max_width.max(24));
         rounded(
             canvas,
             Rect::new(point.0, point.1, width, 28),

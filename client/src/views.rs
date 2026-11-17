@@ -69,6 +69,16 @@ fn empty(canvas: &mut Scene, painter: &mut Painter, title: &str, description: &s
 }
 
 impl App {
+    fn system_name<'a>(&'a self, id: &'a str) -> &'a str {
+        self.systems
+            .iter()
+            .find(|system| system.id == id)
+            .map_or_else(
+                || romstore_client::systems::display_name(id, id),
+                |system| system.display_name(),
+            )
+    }
+
     pub(super) fn draw(&self, canvas: &mut Scene, painter: &mut Painter) -> Result<()> {
         painter.background(canvas)?;
         self.draw_header(canvas, painter)?;
@@ -80,7 +90,12 @@ impl App {
         }
         self.draw_footer(canvas, painter)?;
         if let Some(search) = &self.search {
-            search.draw(canvas, painter, self.config.language)?;
+            search.draw(
+                canvas,
+                painter,
+                self.config.language,
+                search.scope.as_deref().map(|id| self.system_name(id)),
+            )?;
         }
         if self.uninstall_confirmation.is_some() {
             self.draw_uninstall_confirmation(canvas, painter)?;
@@ -271,7 +286,7 @@ impl App {
             )?;
             painter.text(
                 canvas,
-                &system.name,
+                system.display_name(),
                 (104, y + 9),
                 23,
                 if selected { ACCENT } else { TEXT },
@@ -311,7 +326,7 @@ impl App {
                 Rect::new(520, 248, 616, 234),
                 l.text("platform_placeholder"),
             )?;
-            painter.text(canvas, &system.name, (446, 499), 32, TEXT, 742)?;
+            painter.text(canvas, system.display_name(), (446, 499), 32, TEXT, 742)?;
             painter.text(
                 canvas,
                 &l.format("games_available", &[&system.game_count]),
@@ -357,7 +372,7 @@ impl App {
             }
             painter.text(
                 canvas,
-                &system.name,
+                system.display_name(),
                 (x + 13, y + 143),
                 18,
                 if selected { ACCENT } else { TEXT },
@@ -374,7 +389,7 @@ impl App {
         }
         if let Some(system) = self.systems.get(self.system_index) {
             ui::rounded(canvas, Rect::new(40, 582, 1200, 40), 10, SURFACE)?;
-            painter.text(canvas, &system.name, (56, 589), 21, TEXT, 860)?;
+            painter.text(canvas, system.display_name(), (56, 589), 21, TEXT, 860)?;
             painter.text(
                 canvas,
                 &format!("{} / {}", self.system_index + 1, self.systems.len()),
@@ -392,12 +407,7 @@ impl App {
         let system = self
             .catalog_system
             .as_ref()
-            .map_or(l.text("all_platforms"), |id| {
-                self.systems
-                    .iter()
-                    .find(|system| system.id == *id)
-                    .map_or(id.as_str(), |system| system.name.as_str())
-            });
+            .map_or(l.text("all_platforms"), |id| self.system_name(id));
         let eyebrow = if self.search_query.is_empty() {
             l.text("collection_eyebrow").to_owned()
         } else {
@@ -492,14 +502,18 @@ impl App {
                 canvas,
                 &if game.installed {
                     if self.catalog_system.is_none() {
-                        format!("{} · ✓ {}", game.system.to_uppercase(), l.text("installed"))
+                        format!(
+                            "{} · ✓ {}",
+                            self.system_name(&game.system),
+                            l.text("installed")
+                        )
                     } else {
                         format!("✓ {}", l.text("installed"))
                     }
                 } else if self.catalog_system.is_none() {
                     format!(
                         "{} · {}",
-                        game.system.to_uppercase(),
+                        self.system_name(&game.system),
                         if game.installable {
                             l.text("rom_media")
                         } else {
@@ -560,7 +574,7 @@ impl App {
             painter.text(
                 canvas,
                 &if self.catalog_system.is_none() {
-                    format!("{} · {}", game.name, game.system)
+                    format!("{} · {}", game.name, self.system_name(&game.system))
                 } else {
                     game.name.clone()
                 },
@@ -575,8 +589,10 @@ impl App {
         }
         if let Some(game) = page.items.get(self.game_index) {
             ui::panel(canvas, Rect::new(520, 184, 720, 436), false)?;
+            let system_name = self.system_name(&game.system);
+            let badge_width = (painter.width(system_name, 14).ceil() as u32 + 24).min(300);
             let title_width = if self.catalog_system.is_none() {
-                536
+                674 - badge_width - 16
             } else {
                 674
             };
@@ -587,7 +603,13 @@ impl App {
                 painter.text(canvas, &game.name, (542, 201), 26, TEXT, title_width)?;
             }
             if self.catalog_system.is_none() {
-                painter.pill(canvas, &game.system.to_uppercase(), (1100, 201), ACCENT)?;
+                painter.pill_bounded(
+                    canvas,
+                    system_name,
+                    (1216 - badge_width as i32, 201),
+                    ACCENT,
+                    badge_width,
+                )?;
             }
             painter.thumbnail(canvas, &game.id, Rect::new(542, 250, 184, 214))?;
             if game.installed {
@@ -661,13 +683,19 @@ impl App {
         self.heading(
             canvas,
             painter,
-            &l.format("detail_eyebrow", &[&game.system.to_uppercase()]),
+            &l.format("detail_eyebrow", &[&self.system_name(&game.system)]),
             &game.name,
         )?;
         // The mix-image already includes the cover, logo and screenshot.
         ui::panel(canvas, Rect::new(40, 184, 660, 436), false)?;
         painter.art(canvas, Rect::new(58, 202, 624, 400))?;
-        let badge_width = painter.pill(canvas, &game.system.to_uppercase(), (724, 188), ACCENT)?;
+        let badge_width = painter.pill_bounded(
+            canvas,
+            self.system_name(&game.system),
+            (724, 188),
+            ACCENT,
+            320,
+        )?;
         if game.installed {
             painter.pill(
                 canvas,

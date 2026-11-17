@@ -5,4 +5,5 @@ pub mod i18n;
 pub mod install;
 mod layout;
 pub mod playlist;
+pub mod systems;
 pub mod uninstall;

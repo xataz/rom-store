@@ -124,13 +124,14 @@ impl SearchDialog {
         canvas: &mut Canvas<Window>,
         painter: &mut Painter,
         l: Language,
+        scope_name: Option<&str>,
     ) -> Result<()> {
         ui::dim(canvas, 205)?;
         ui::panel(canvas, Rect::new(200, 115, 880, 510), true)?;
         painter.text(canvas, l.text("search_title"), (236, 138), 30, TEXT, 800)?;
         let scope = self.scope.as_ref().map_or_else(
             || l.text("all_platforms").to_owned(),
-            |id| l.format("search_platform", &[id]),
+            |id| l.format("search_platform", &[&scope_name.unwrap_or(id)]),
         );
         painter.text(canvas, &scope, (238, 184), 17, ACCENT, 800)?;
         ui::rounded(canvas, Rect::new(236, 220, 808, 50), 10, SURFACE)?;
