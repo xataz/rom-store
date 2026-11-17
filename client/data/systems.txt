@@ -1,172 +1,266 @@
-3do: 3DO Interactive Multiplayer
-adam: Coleco Adam
-amiga: Commodore Amiga
-amiga1200: Commodore Amiga 1200
-amiga600: Commodore Amiga 600
-amigacd32: Commodore Amiga CD32
-amstradcpc: Amstrad CPC
-apple2: Apple II
-apple2gs: Apple IIGS
-arcade: Arcade
-arcadia: Emerson Arcadia 2001
-archimedes: Acorn Archimedes
-arduboy: Arduboy Miniature Game System
-astrocde: Bally Astrocade
-atari2600: Atari 2600
-atari5200: Atari 5200
-atari7800: Atari 7800 ProSystem
-atari800: Atari 800
-atarijaguar: Atari Jaguar
-atarilynx: Atari Lynx
-atarist: Atari ST
-atarixe: Atari XE
-atomiswave: Sammy Corporation Atomiswave
-bbcmicro: Acorn Computers BBC Micro
-c64: Commodore 64
-cdimono1: Philips CD-i
-cdtv: Commodore CDTV
-chailove: ChaiLove Game Engine
-channelf: Fairchild Channel F
-coco: Tandy Color Computer
-colecovision: Coleco ColecoVision
-consolearcade: Console Arcade Systems
-cps: Capcom Play System
-cps1: Capcom Play System I
-cps2: Capcom Play System II
-cps3: Capcom Play System III
-crvision: VTech CreatiVision
-daphne: Daphne Arcade LaserDisc Emulator
-desktop: Desktop Applications
-doom: Doom
-dos: DOS (PC)
-dragon32: Dragon Data Dragon 32
-dreamcast: Sega Dreamcast
-easyrpg: EasyRPG Game Engine
-electron: Acorn Electron
-famicom: Nintendo Family Computer
-fba: FinalBurn Alpha
-fbneo: FinalBurn Neo
-fds: Nintendo Famicom Disk System
-flash: Adobe Flash
-fm7: Fujitsu FM-7
-fmtowns: Fujitsu FM Towns
-gamate: Bit Corporation Gamate
-gameandwatch: Nintendo Game and Watch
-gamecom: Tiger Electronics Game.com
-gamegear: Sega Game Gear
-gb: Nintendo Game Boy
-gba: Nintendo Game Boy Advance
-gbc: Nintendo Game Boy Color
-gc: Nintendo GameCube
-genesis: Sega Genesis
-gmaster: Hartung Game Master
-gx4000: Amstrad GX4000
-intellivision: Mattel Electronics Intellivision
-j2me: Java 2 Micro Edition (J2ME)
-laserdisc: LaserDisc Games
-lcdgames: LCD Handheld Games
-lowresnx: LowRes NX Fantasy Console
-lutro: Lutro Game Engine
-macintosh: Apple Macintosh
+# Source : https://wiki.batocera.org/systems
+# Colonnes : System short name / Full name/alternative names
+# Identifiants adaptés au format du client : mame/model1 -> model1 ; msx2+ -> msx2plus.
+
+# Arcade
 mame: Multiple Arcade Machine Emulator
-mark3: Sega Mark III
-mastersystem: Sega Master System
-megacd: Sega Mega-CD
-megacdjp: Sega Mega-CD
-megadrive: Sega Mega Drive
-megadrivejp: Sega Mega Drive
-megaduck: Creatronic Mega Duck
-mess: Multi Emulator Super System
+fbneo: FinalBurn Neo
+dice: Discrete Integrated Circuit Emulator
+daphne: DAPHNE (Laserdisc)
+singe: SINGE
+namco22: Namco System 22
+model1: Sega Model 1
 model2: Sega Model 2
-moto: Thomson MO/TO Series
-msx: MSX
-msx1: MSX1
-msx2: MSX2
-msxturbor: MSX Turbo R
-mugen: M.U.G.E.N Game Engine
-multivision: Othello Multivision
-n3ds: Nintendo 3DS
-n64: Nintendo 64
-n64dd: Nintendo 64DD
+model3: Sega Model 3
 naomi: Sega NAOMI
+hikaru: Sega Hikaru
+gaelco: Gaelco 3D
 naomi2: Sega NAOMI 2
-naomigd: Sega NAOMI GD-ROM
-nds: Nintendo DS
-neogeo: SNK Neo Geo
-neogeocd: SNK Neo Geo CD
-neogeocdjp: SNK Neo Geo CD
-nes: Nintendo Entertainment System
-ngp: SNK Neo Geo Pocket
-ngpc: SNK Neo Geo Pocket Color
-odyssey2: Magnavox Odyssey 2
-openbor: OpenBOR Game Engine
-oric: Tangerine Computer Systems Oric
-palm: Palm OS
-pc: IBM PC
-pc88: NEC PC-8800 Series
-pc98: NEC PC-9800 Series
-pcengine: NEC PC Engine
-pcenginecd: NEC PC Engine CD
-pcfx: NEC PC-FX
-pico8: PICO-8 Fantasy Console
-plus4: Commodore Plus/4
-pokemini: Nintendo Pokémon Mini
-portmaster: PortMaster
-ports: Ports
-primehack: PrimeHack
-ps2: Sony PlayStation 2
-ps3: Sony PlayStation 3
-psp: Sony PlayStation Portable
-psvita: Sony PlayStation Vita
-psx: Sony PlayStation
+namco2x6: Namco System 246
+chihiro: Sega Chihiro
+triforce: Triforce
+atomiswave: Sammy Atomiswave
+cave3rd: Cave CV1000
+systemsp: Sega System SP
+lindbergh: Sega Lindbergh
+
+# Home console
+gong: Pong
+channelf: Fairchild Channel F
+atari2600: Atari 2600/VCS
+odyssey2: Magnavox Odyssey²/Philips Videopac G7000
+astrocade: Bally Astrocade/Arcade/ABA-1000
+apfm1000: APF-MP1000/MP-1000/M-1000
+vc4000: Video Computer 4000
+intellivision: Intellivision
+sv8000: Super Vision 8000
+cassettevision: Cassette Vision
+atari5200: Atari 5200
+colecovision: ColecoVision
+advision: Adventure Vision
+vectrex: Vectrex
+crvision: CreatiVision/Educat 2002/Dick Smith Wizzard/FunVision
+arcadia: Arcadia 2001/et al.
+nes: Nintendo Entertainment System/Famicom
+sg1000: Sega SG-1000/SG-1000 II
+multivision: Othello Multivision
+videopacplus: Philips Videopac+ G7400/G7420
 pv1000: Casio PV-1000
-quake: Quake
-satellaview: Nintendo Satellaview
+pv2000: Casio PV-2000
+ctvboy: Compact Vision TV Boy
+scv: Super Cassette Vision
+mastersystem: Sega Master System/Mark III
+fds: Family Computer Disk System/Famicom
+atari7800: Atari 7800
+socrates: Socrates/Prof. Weiss-Alles/Professeur Saitout
+pcengine: PC Engine/TurboGrafx-16
+megadrive: Sega Genesis/Mega Drive
+pcenginecd: PC Engine CD-ROM²/TurboGrafx-CD/TurboDuo
+supergrafx: PC Engine SuperGrafx
+snes: Super Nintendo Entertainment System
+neogeo: Neo Geo
+cdi: Compact Disc Interactive/CD-i
+amigacdtv: Commodore CDTV
+gx4000: Amstrad GX4000
+megacd: Sega CD/Mega CD
+snes-msu1: Super NES CD-ROM/SNES MSU-1
+pico: Sega Pico
+sgb: Super Game Boy
+supracan: Super A'Can
+megadrive-msu: MSU-MD
+sgb-msu1: LADX-MSU1
+jaguar: Atari Jaguar
+3do: 3DO Interactive Multiplayer
+amigacd32: Amiga CD32
+sega32x: Sega 32X
+psx: Sony PlayStation
+pcfx: NEC PC-FX
+neogeocd: Neo Geo CD
 saturn: Sega Saturn
-saturnjp: Sega Saturn
-scummvm: ScummVM Game Engine
-scv: Epoch Super Cassette Vision
-sega32x: Sega Mega Drive 32X
-sega32xjp: Sega Super 32X
-sega32xna: Sega Genesis 32X
-segacd: Sega CD
-sfc: Nintendo SFC (Super Famicom)
-sg-1000: Sega SG-1000
-sgb: Nintendo Super Game Boy
-snes: Nintendo SNES (Super Nintendo)
-snesna: Nintendo SNES (Super Nintendo)
-solarus: Solarus Game Engine
-spectravideo: Spectravideo
-stv: Sega Titan Video Game System
-sufami: Bandai SuFami Turbo
-supergrafx: NEC SuperGrafx
-supervision: Watara Supervision
-supracan: Funtech Super A'Can
-switch: Nintendo Switch
-tanodragon: Tano Dragon
-tg-cd: NEC TurboGrafx-CD
-tg16: NEC TurboGrafx-16
-ti99: Texas Instruments TI-99
-tic80: TIC-80 Fantasy Computer
-to8: Thomson TO8
-triforce: Namco-Sega-Nintendo Triforce
-uzebox: Uzebox Open Source Console
-vectrex: GCE Vectrex
-vic20: Commodore VIC-20
-videopac: Philips Videopac G7000
-vircon32: Vircon32 Virtual Console
-virtualboy: Nintendo Virtual Boy
-vsmile: VTech V.Smile
-wasm4: WASM-4 Fantasy Console
-wii: Nintendo Wii
-wiiu: Nintendo Wii U
-windows3x: Microsoft Windows 3.x
-windows9x: Microsoft Windows 9x
-wonderswan: Bandai WonderSwan
-wonderswancolor: Bandai WonderSwan Color
-x1: Sharp X1
-x68000: Sharp X68000
+loopy: Casio Loopy
+virtualboy: Virtual Boy
+satellaview: Satellaview
+jaguarcd: Atari Jaguar CD
+sufami: SuFami Turbo
+n64: Nintendo 64
+dreamcast: Sega Dreamcast
+n64dd: Nintendo 64DD
+ps2: Sony PlayStation 2
+gamecube: Nintendo GameCube
 xbox: Microsoft Xbox
-zmachine: Infocom Z-machine
+tvgames: Plug and Play TV Games
+beena: Sega Advanced Pico Beena
+vsmile: V.Smile (TV LEARNING SYSTEM)
+xbox360: Microsoft Xbox 360
+wii: Nintendo Wii
+ps3: Sony PlayStation 3
+wiiu: Nintendo Wii U
+ps4: Sony PlayStation 4
+uzebox: Uzebox Open-Source console
+voxatron: Voxatron fantasy console
+pico8: PICO-8 fantasy console
+tic80: TIC-80 fantasy console
+lowresnx: Lowres NX
+wasm4: WASM4 fantasy console
+pyxel: Pyxel fantasy console
+vircon32: Vircon32 virtual console
+
+# Portable game console
+gameandwatch: Game & Watch
+lcdgames: Handheld LCD Games
+gamepock: Game Pocket Computer
+gb: Game Boy
+gb2players: Game Boy 2 Players
+lynx: Atari Lynx
+gamegear: Game Gear
+gamate: Gamate/chāojí xiǎozi/Super Boy
+gmaster: Game Master/Systema 2000/Super Game/Game Tronic
+supervision: Watara Supervision
+megaduck: Mega Duck/Cougar Boy
+gamecom: Game.com
+gbc: Game Boy Color
+gbc2players: Game Boy Color 2 Players
+ngp: Neo Geo Pocket
+vemulator: Dreamcast VMU/Visual Memory Unit
+ngpc: Neo Geo Pocket Color
+wswan: WonderSwan
+wswanc: WonderSwan Color
+gba: Game Boy Advance
+pokemini: Pokémon Mini
+gp32: GP32
+nds: Nintendo DS
+psp: PlayStation Portable
+3ds: Nintendo 3DS
+psvita: PlayStation_Vita
+arduboy: Arduboy
+
+# Home computer
+pdp1: PDP-1
+apple2: Apple II
+pet: Commodore PET
+trs80: TRS-80
+mz80k: Sharp MZ-80K
+atari800: Atari 800
+atom: Acorn Atom
+ti99: TI-99/4 (TI-99/4A)
+pc80: NEC PC-8001
+c20: Commodore VIC-20/VC-20
+coco: TRS-80/Tandy Color Computer
+pc60: NEC PC-6000
+pc88: NEC PC-8800
 zx81: Sinclair ZX81
-zxspectrum: Sinclair ZX Spectrum
+bbcmicro: BBC Micro/Master/Archimedes
+x1: Sharp X1
+zxspectrum: ZX Spectrum
+c64: Commodore 64
+pc98: NEC PC-9800/PC-98
+fm7: Fujitsu Micro 7 (FM-7)
+tutor: Tomy Tutor/Pyūta/Grandstand Tutor
+cgenie: Colour Genie
+mz700: Sharp MZ-700
+mz2000: Sharp MZ-2000
+electron: Acorn Electron
+camplynx: Camputers Lynx
+msx1: Microsoft MSX1
+adam: Coleco_Adam
+spectravideo: Spectravideo
+rx78: Bandai RX-78
+sc3000: Sega SC-3000
+mc10: TRS-80 MC-10
+dragon64: Dragon 64
+amstradcpc: Amstrad CPC
+macintosh: Macintosh 128K
+thomson: Thomson MO/TO Series Computer
+cplus4: Commodore Plus/4
+laser310: Laser 310
+oricatmos: Oric Atmos
+mz800: Sharp MZ-800
+atarist: Atari ST
+msx2: Microsoft MSX2
+c128: Commodore 128 (C128)
+enterprise: Enterprise
+pcw: Amstrad PCW
+bk: Elektronika BK
+mz2500: Sharp MZ-2500
+apple2gs: Apple IIGS
+segaai: Sega AI Computer
+tvc: Videoton TVC
+archimedes: Archimedes
+xegs: Atari XEGS
+amiga500: Amiga 500/OCS/ECS
+x68000: Sharp X68000
+msx2plus: Microsoft MSX2+
+fmtowns: FM Towns/Towns Marty
+samcoupe: SAM Coupé
+amiga1200: Amiga 1200/AGA
+vis: Tandy Video Information System
+msxturbor: Microsoft MSX turboR
+commanderx16: Commander X16
+
+# Port, Flatpak & Miscellaneous
+dos: DOSbox
+windows: WINE
+flatpak: Flatpak
+steam: Steam
+ports: Native ports
+flash: Flashpoint
+moonlight: Moonlight
+vgmplay: MAME Video Game Music Player
+abuse: Abuse SDL
+bennugd: BennuGD
+bstone: Blake Stone
+cannonball: Cannonball
+catacomb: CatacombGL
+cavestory: Cave Story
+cdogs: C-Dogs
+cgenius: Commander Genius
+corsixth: CorsixTH
+devilutionx: DevilutionX
+doom3: Doom 3 BFG
+dxx-rebirth: DXX-Rebirth
+easyrpg: EasyRPG
+ecwolf: ECWolf
+eduke32: EDuke32
+etlegacy: ET: Legacy
+fallout1-ce: Fallout CE
+fallout2-ce: Fallout2 CE
+fury: Ion Fury
+gzdoom: GZDoom
+halflife: Half-Life 1
+hcl: Hydra Castle Labyrinth
+hurrican: Hurrican
+ikemen: Ikemen Go
+jazz2: Jazz Jackrabbit 2
+jkdf2: Jedi Knight: Dark Forces II
+jknight: Star Wars: Jedi Academy
+lutro: Lutro
+mohaa: Medal of Honor: Allied Assault
+mrboom: Mr. Boom
+mugen: M.U.G.E.N
+openbor: Open Beats of Rage
+openjazz: Openjazz
+prboom: PrBoom
+pygame: pygame
+quake: Quake
+quake2: Quake II
+quake3: Quake III Arena
+raze: Raze
+reminiscence: REminiscence
+rott: Rise of the Triad
+rtcw: Return to Castle Wolfenstein
+scummvm: ScummVM
+sdlpop: SDLPoP
+solarus: Solarus
+sonic-mania: Sonic Mania
+sonic3-air: Sonic 3 A.I.R.
+sonicretro: Star Engine/Sonic Retro Engine
+superbroswar: Super Mario War
+theforceengine: The Force Engine
+thextech: TheXTech
+traider1: TR1X - Tomb Raider 1
+traider2: TR2X - Tomb Raider 2
+tyrian: Tyrian
+uqm: The Ur-Quan Masters
+vpinball: Visual Pinball
+xrick: Rick Dangerous
+zc210: Zelda Classic
