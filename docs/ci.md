@@ -78,6 +78,48 @@ et ne pas approuver aveuglément les workflows provenant de forks.
 
 ## Publier une version
 
+### Préparation automatique (recommandée)
+
+Depuis un dépôt propre, lancer la commande du composant concerné :
+
+```bash
+make release-client VERSION=0.1.4
+# Ou, indépendamment :
+make release-server VERSION=0.1.3
+```
+
+Ces commandes nécessitent Python **3.11+**, Git avec une identité de commit configurée,
+et l'environnement Rust habituel du composant (dont SDL2 pour le client).
+Le suffixe de prérelease est accepté, par exemple `VERSION=0.2.0-rc.1`.
+`CARGO` et `PYTHON` peuvent être surchargés comme pour les autres cibles Make.
+
+Le script `scripts/ci/prepare_release.py` :
+
+1. Refuse les changements non committés, y compris les fichiers non suivis,
+   un HEAD détaché, une version invalide ou identique à la version actuelle,
+   et un tag déjà présent **localement**.
+2. Modifie uniquement `package.version` du composant et actualise son `Cargo.lock`
+   avec `cargo metadata`, en conservant les versions verrouillées des dépendances.
+3. Vérifie le formatage, Clippy (`--all-targets`, avertissements interdits)
+   et les tests Rust non ignorés du composant. Clippy et les tests gardent `--locked`.
+4. Crée le commit contenant le manifeste et le lock, puis le tag annoté correspondant.
+5. Affiche les deux commandes de push à exécuter après vérification.
+
+**Aucun push n'est automatique.** Vérifier notamment `git show HEAD` et le tag,
+puis utiliser les commandes affichées pour pousser la branche et le tag sur `origin`.
+Les vérifications complètes de la CI et la publication restent déclenchées par le push.
+Mettre à jour ses références Git avant de commencer pour éviter de réutiliser un tag
+existant seulement sur le dépôt distant.
+
+En cas d'échec des contrôles, aucun commit ni tag n'est créé. Les modifications
+restent disponibles, sans annulation automatique : vérifier `git status`, corriger
+le problème et terminer manuellement, ou revenir explicitement à un état propre
+avant de relancer. Si Git échoue lors du commit ou du tag (par exemple à cause
+d'un hook ou d'une signature), inspecter aussi `git log` et `git tag --list` :
+un commit peut déjà avoir été créé. Le script ne supprime ni commit ni tag.
+
+### Préparation manuelle
+
 Mettre à jour `package.version` dans le `Cargo.toml` du composant concerné,
 puis actualiser et committer **son** `Cargo.lock` avec le manifeste. La version
 de l'autre composant reste inchangée. Par exemple, un client `0.2.0` peut coexister

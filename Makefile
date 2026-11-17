@@ -5,7 +5,8 @@ PROFILE ?= release
 PYTHON ?= python3
 
 .PHONY: all build client server test test-client test-server test-unit \
-	test-unit-client test-unit-server fixtures run-server run-client help
+	test-unit-client test-unit-server fixtures run-server run-client help \
+	release-client release-server
 
 all: build
 
@@ -33,6 +34,12 @@ test-unit-client:
 test-unit-server:
 	$(CARGO) test --locked --manifest-path server/Cargo.toml --lib --bins
 
+release-client:
+	$(PYTHON) scripts/ci/prepare_release.py client "$(VERSION)" --cargo "$(CARGO)"
+
+release-server:
+	$(PYTHON) scripts/ci/prepare_release.py server "$(VERSION)" --cargo "$(CARGO)"
+
 fixtures:
 	$(PYTHON) test/generate.py
 
@@ -56,3 +63,5 @@ help:
 	@echo 'make run-server    Servir la bibliothèque synthétique sur 127.0.0.1:8000'
 	@echo 'make run-client    Ouvrir le client avec la configuration de démonstration'
 	@echo 'make fixtures      Régénérer les données synthétiques (Python 3 requis)'
+	@echo 'make release-client VERSION=X.Y.Z  Préparer le commit et le tag client, sans push'
+	@echo 'make release-server VERSION=X.Y.Z  Préparer le commit et le tag serveur, sans push'
