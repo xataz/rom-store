@@ -5,12 +5,17 @@ sans compilation croisée.
 
 ## Préparer GitLab et le runner
 
-1. Enregistrer un runner **Linux x86_64 avec exécuteur Docker** pouvant prendre
-   les jobs sans tag. Sinon, ajouter les tags du runner aux jobs concernés.
-2. Autoriser les images `node:22-bookworm`, `orhunp/git-cliff:2.10.1` et
+1. Enregistrer un runner **Linux x86_64 avec exécuteur Docker**, tagué `self`.
+   Monter `/var/run/docker.sock` dans les conteneurs de jobs. Les jobs construisent
+   et exécutent leur image avec le démon Docker de l'hôte ; aucun mode privilégié
+   ni service Docker-in-Docker n'est nécessaire. Le hostname du conteneur de job
+   doit rester son identifiant Docker par défaut : `--volumes-from "$HOSTNAME"`
+   partage son checkout et son cache avec le conteneur de compilation.
+   **Réserver ce runner aux projets de confiance** : le socket donne accès à l'hôte.
+2. Autoriser les images `docker:27-cli`, `rust:1.100-bookworm`,
+   `node:22-bookworm-slim`, `orhunp/git-cliff:2.10.1` et
    `registry.gitlab.com/gitlab-org/cli:v1.76.0`, les accès aux dépôts Debian/Alpine,
-   à Rust, à Cargo et à l'API GitLab. Aucun mode privilégié ni socket Docker monté
-   n'est nécessaire. Le mot-clé `release:` nécessite un GitLab/Runner récent
+   à Cargo et à l'API GitLab. Le mot-clé `release:` nécessite un GitLab/Runner récent
    prenant en charge `glab` (GitLab 18.0+).
 3. Protéger la branche **`main`** et les tags **`client-v*`**, **`server-v*`**.
    Autoriser le compte de release à pousser sur `main` et à créer ces tags.
@@ -25,14 +30,20 @@ sans compilation croisée.
    **`GITLAB_RELEASE_TOKEN`**, avec les options **Masked** et **Protected**,
    et une portée d'environnement `*`. Utiliser le type **Variable**, pas **File**,
    et renseigner uniquement la valeur du jeton. Prévoir son renouvellement avant expiration.
-6. Activer le **Package Registry** du projet et conserver les paquets génériques
-   `romstore-client` et `romstore-server` : les releases pointent sur ces fichiers,
-   et non sur les artifacts temporaires des jobs.
+6. Autoriser la conservation des **artifacts** du job `release-files` avec
+   `expire_in: never`. Ne pas supprimer ces artifacts : les fichiers des releases
+   y sont stockés. Leur accès suit les permissions GitLab du projet et de ses jobs.
+
+**Framagit désactive le Package Registry au niveau de son instance**, ce qui
+renvoie un 404 lors d'un envoi vers `/packages/generic/`. La pipeline n'en dépend
+donc pas. Voir [la confirmation de l'administrateur Framasoft](https://framacolibri.org/t/framagit-ci-cd-package-registry-and-images-pull-policy/32331/2).
 
 La préparation utilise ce jeton uniquement pour Git. Contrairement à un push
-authentifié avec `CI_JOB_TOKEN`, son push déclenche bien les pipelines de branche
-et de tag. La publication utilise le **`CI_JOB_TOKEN` temporaire** de la pipeline
-de tag pour le registre générique et l'API Releases ; aucun droit `api` n'est
+authentifié avec `CI_JOB_TOKEN`, son push permet de déclencher la pipeline de tag.
+Le commit automatique de version sur `main` est exclu par `workflow: rules` :
+aucune pipeline de branche supplémentaire n'est créée. La publication utilise
+le **`CI_JOB_TOKEN` temporaire** de la pipeline
+de tag pour l'API Releases ; aucun droit `api` n'est
 nécessaire sur le jeton de push.
 
 Le script fixe explicitement l'utilisateur `oauth2` dans les URL de lecture et
@@ -56,10 +67,15 @@ revanche, une modification de ce script nécessite de pousser le correctif puis
 d'utiliser **la nouvelle pipeline de `main`** : relancer un ancien job exécute
 toujours les sources de son ancien commit.
 
-L'image de compilation est Debian 12 Bookworm, avec Node 22, **Rust 1.90.0**,
-Clippy et rustfmt. SDL2 et les polices sont installées uniquement pour le client
-ou les vérifications communes. L'installation s'effectue en root dans le conteneur,
-pas sur l'hôte. Le cache conserve le registre et les dépôts Cargo, pas les `target`.
+L'image de compilation est Debian 12 Bookworm, avec Node 22, **Rust 1.100**,
+Clippy, rustfmt, SDL2, les polices, `cargo-release` et `git-cliff`.
+Le template `.rust` construit cette image au début des jobs qui l'utilisent,
+puis exécute leur paramètre `CI_SCRIPT` dedans. Il n'y a pas de job `build-image`
+ni d'image locale à préparer à l'avance. Le contexte est limité à `.gitlab/ci` :
+le cache Docker réutilise les couches tant que leur définition ne change pas.
+Ce cache est propre à chaque hôte et doit être conservé entre les jobs.
+Les outils sont installés dans l'image, pas sur l'hôte.
+Le cache GitLab conserve le registre et les dépôts Cargo, pas les `target`.
 Configurer le cache distribué du runner si les jobs tournent sur plusieurs machines.
 
 La CI et les releases **ne nécessitent pas Python** :
@@ -71,7 +87,8 @@ La CI et les releases **ne nécessitent pas Python** :
 | Sélection des composants et garde-fous Git | Bash et Git |
 | Archive et empreinte | `tar`, `od` et `sha256sum` |
 | Lecture des métadonnées Cargo | `cargo metadata` et `jq` |
-| Envoi au registre générique | `curl` avec `CI_JOB_TOKEN` |
+| Conservation des fichiers | Artifacts GitLab du job `release-files`, sans expiration |
+| Vérification d'une release existante | `curl` avec `CI_JOB_TOKEN` |
 | Création de la release | Mot-clé GitLab `release:` et `glab` |
 
 Les fichiers `client/release.toml` et `server/release.toml` désactivent la
@@ -93,7 +110,7 @@ check → test → build → release (main uniquement)
   et d'intégration Rust des deux composants ;
 - **build** : compilation release, tests E2E avec le véritable client, test SDL
   sans écran et test de densité du texte ;
-- **release** : ouvre la pipeline enfant contenant les boutons de release.
+- **release** : job manuel optionnel et paramétrable, uniquement sur `main`.
 
 Une branche ayant une merge request ouverte utilise la pipeline de MR plutôt que
 de lancer deux pipelines à chaque push. Les pipelines de MR n'ont jamais de jobs
@@ -101,20 +118,25 @@ de préparation ou de publication de release.
 
 ## Releases manuelles depuis `main`
 
-Après réussite des vérifications, ouvrir le job de déclenchement **release**, puis
-sa **pipeline enfant** dans le graphe GitLab. Les jobs manuels sont dans son stage
-`release` : GitLab ne permet pas d'injecter des jobs dynamiques dans le parent.
+Après réussite des vérifications, cliquer sur le **nom du job `release`** pour
+ouvrir son formulaire manuel, plutôt que sur le bouton de lancement rapide.
+Renseigner les variables avant de lancer et confirmer :
 
-| Changements restant à publier | Boutons proposés |
-|---|---|
-| Client uniquement | `client:fix`, `client:minor`, `client:major` |
-| Serveur uniquement | `server:fix`, `server:minor`, `server:major` |
-| Les deux composants / fichiers partagés | Les six jobs |
-| Aucun changement | Un job informatif, sans bouton de release |
+| Variable | Valeurs | Par défaut |
+|---|---|---|
+| `RELEASE_COMPONENT` | `client`, `server` | `client` |
+| `RELEASE_TYPE` | `fix`, `minor`, `major` | `fix` |
+
+Les listes déroulantes sont disponibles dans **New pipeline** ; le formulaire
+du job manuel permet de surcharger ces mêmes variables. Ne jamais y saisir de
+secret. Un lancement rapide utilise les valeurs de la pipeline.
+Il n'y a plus de pipeline enfant, de YAML généré ni de six boutons distincts.
+Le job vérifie au lancement que le composant choisi a des changements à publier ;
+sinon il refuse de créer une version.
 
 Les changements sont comparés **au dernier tag accessible du composant**, pas au
 dernier push : une modification client reste donc à publier même si les derniers
-commits ne touchent que le serveur. Sans tag, le composant est proposé pour sa
+commits ne touchent que le serveur. Sans tag, le composant peut publier sa
 première release. Les tags invalides ou non ancêtres de `main` sont ignorés.
 La comparaison porte sur la différence nette des fichiers ; une modification
 entièrement annulée depuis le tag ne nécessite pas de release.
@@ -123,7 +145,7 @@ Les chemins sous `client/` concernent le client ; ceux sous `server/` concernent
 le serveur. **Tout autre chemin est partagé**, y compris documentation, scripts,
 tests communs, Makefile et CI. Chaque composant utilise son propre point de
 comparaison : si le client a déjà publié un changement partagé, seul le serveur
-reste proposé pour ce changement.
+reste à publier pour ce changement.
 
 Les versions sont indépendantes et lues depuis leurs `Cargo.toml` respectifs :
 
@@ -135,25 +157,30 @@ Les versions sont indépendantes et lues depuis leurs `Cargo.toml` respectifs :
 
 Après confirmation, le job :
 
-1. Exige une pipeline enfant de la branche `main` protégée, le commit exact de la
-   pipeline parente et un `main` distant n'ayant pas avancé.
+1. Exige une pipeline de la branche `main` protégée, le commit exact de cette
+   pipeline et un `main` distant n'ayant pas avancé.
 2. Récupère les tags et vérifie que le composant a encore des changements à publier.
-3. Appelle la cible Make du composant, qui délègue à `cargo-release` l'incrément
-   de `package.version` et la mise à jour de `Cargo.lock`, sans mise à jour
-   volontaire des dépendances. Son hook relance formatage, Clippy et tests Rust.
+3. Utilise le même script que les cibles Make locales : `cargo-release` incrémente
+   `package.version` et met à jour `Cargo.lock`, sans mise à jour volontaire des
+   dépendances. Son hook relance formatage, Clippy et tests Rust.
 4. Crée un commit et un tag annoté `client-vX.Y.Z` ou `server-vX.Y.Z`.
 5. Revérifie `main`, puis pousse le commit et le tag **atomiquement**, sans force.
-   Si `main` avance entre-temps, le push est rejeté sans publier le tag.
+    Si `main` avance entre-temps, le push est rejeté sans publier le tag.
+    La règle de workflow ignore sur `main` le message de commit généré par
+    `cargo-release` (`chore(client|server): prépare la version X.Y.Z`), mais
+    accepte le tag en priorité. Ne pas ajouter `[skip ci]` au commit : cela
+    empêcherait aussi la publication du tag.
 
 Les préparations client et serveur partagent un verrou `resource_group` pour
-éviter les courses. Après une première release, **utiliser la nouvelle pipeline
-de `main`** pour publier l'autre composant : les boutons de l'ancienne pipeline
-restent visibles mais refusent de publier depuis un commit obsolète. La liste
-des boutons est un instantané au moment de la génération, pas une vue actualisée.
+éviter les courses. Après une première release, l'ancienne pipeline devient
+obsolète. Pour publier l'autre composant sans nouveau changement de code,
+**lancer manuellement une nouvelle pipeline de `main`** avec **New pipeline**,
+puis utiliser son job `release`. La règle d'exclusion ne concerne que les pushs,
+pas les pipelines lancées manuellement.
 
-Les jobs manuels sont optionnels et ne bloquent pas le statut vert du parent.
-Un échec de préparation doit être consulté dans le job enfant : il ne rend pas
-la pipeline parente rouge. Ne pas lancer plusieurs types de release pour le
+Le job manuel est optionnel et ne bloque pas le statut vert de la pipeline
+(`allow_failure: true`). Consulter son statut et ses logs en cas d'échec.
+Ne pas lancer plusieurs types de release pour le
 même composant : choisir un seul incrément. Aucun push n'est effectué si les
 contrôles échouent. Un échec du push laisse seulement les changements locaux
 dans l'environnement éphémère du job, sans annulation ni force-push.
@@ -173,17 +200,20 @@ Le tag doit correspondre exactement à la version du manifeste ciblé. Après
 validation du binaire ELF64 x86_64, la publication :
 
 1. Prépare l'archive et `SHA256SUMS`.
-2. Génère `CHANGELOG.md` avec `git-cliff`, dans le job parallèle `notes`, depuis
+2. Génère `CHANGELOG.md` avec `git-cliff`, dans le job `release-files`, depuis
    les commits entre ce tag et le précédent tag du même composant, avec liens
    de comparaison et de commits GitLab.
-3. Envoie les trois fichiers au registre de paquets génériques GitLab.
+3. Le job `release-files`, toujours dans le stage `build` mais dépendant du job
+   `build`, rassemble les trois fichiers, vérifie leur présence et les
+   sommes de contrôle, puis les conserve comme artifacts **sans expiration**.
 4. Le mot-clé GitLab `release:` crée la release et ses liens de téléchargement
-   **uniquement après la réussite de tous les envois**. Une release existante
-   n'est jamais modifiée.
+   **uniquement après la réussite de `release-files` et du stockage des artifacts**.
+   Les liens désignent l'identifiant exact de ce job, jamais le dernier job d'une
+   branche. Une release existante n'est jamais modifiée.
 
 Un tag suffixé `-rc.1` reste identifiable par son nom mais crée une release
 GitLab ordinaire.
-Les préreleases se préparent manuellement : les boutons d'incrément exigent une
+Les préreleases se préparent manuellement : le job d'incrément exige une
 version actuelle stable `X.Y.Z`.
 
 L'historique complet est requis (`GIT_DEPTH: '0'`). Pour la première release,
@@ -199,16 +229,24 @@ SHA256SUMS
 CHANGELOG.md
 ```
 
-Les fichiers locaux sont isolés dans `dist/<tag>/`. Les artifacts de build
-expirent après sept jours ; les fichiers du Package Registry restent disponibles
-tant qu'aucune règle de nettoyage ne les supprime.
+Les fichiers locaux sont isolés dans `dist/<tag>/`. Les artifacts intermédiaires
+de `build` expirent après sept jours, sans affecter la copie conservée
+par `release-files`. Cette copie n'expire pas automatiquement, mais reste
+**supprimable manuellement** ou par une politique d'administration de l'instance.
+Supprimer le job, ses artifacts ou sa pipeline peut casser les téléchargements
+de la release. Prévoir des sauvegardes et respecter les quotas de Framagit.
 
 En cas d'échec de publication, **réparer et relancer la pipeline de ce tag** avant
 de préparer une nouvelle version : la détection utilise les tags, même si leur
-publication a échoué. Si des fichiers ont été envoyés partiellement, supprimer
-le paquet générique incomplet avant de relancer. Ne jamais supprimer une release
+publication a échoué. Si les artifacts sources ont expiré avant une reprise,
+relancer les jobs producteurs puis `release-files` et `publish`. Ne jamais supprimer une release
 publiée ou remplacer silencieusement ses fichiers pour corriger ses binaires ;
 préparer une nouvelle version. Les publications d'un même tag sont sérialisées.
+
+Attention : si la correction nécessite de modifier les scripts ou le YAML, une
+ancienne pipeline de tag conserve son ancien code, y compris au retry. Pousser
+la correction sur `main`, puis préparer une nouvelle version, est la solution
+la plus sûre ; ne pas déplacer automatiquement un tag existant.
 
 ## Préparer une release localement
 
@@ -282,7 +320,6 @@ la compatibilité de la version de Batocera (glibc/SDL2 et matériel).
 
 ```bash
 make test-ci
-bash scripts/ci/generate-releases.sh dist/release-jobs.yml
 make client
 bash scripts/ci/package.sh client-v0.1.0
 bash scripts/ci/changelog.sh client-v0.1.0
@@ -294,8 +331,9 @@ définir `CI_PROJECT_URL` pour inclure les liens GitLab dans les notes locales.
 Ces commandes n'effectuent aucun accès à l'API GitLab.
 
 `make test-ci` travaille dans des dépôts temporaires : détection des composants,
-tags indépendants, hooks, options Make, packaging, sommes de contrôle et erreurs
-d'envoi simulées. Si les outils sont installés avec `make release-tools`, il teste
+tags indépendants, hooks, options Make, packaging, sommes de contrôle, liens vers
+les artifacts et contrôles de publication avec API simulée. Si les outils sont
+installés avec `make release-tools`, il teste
 aussi le vrai `git-cliff` et une release avec le vrai `cargo-release`, jusqu'au
 push atomique **vers un dépôt Git local isolé**, jamais vers le dépôt du projet.
 

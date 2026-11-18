@@ -64,5 +64,5 @@ parse_tag() {
 assert_current() {
     local remote
     remote=$(git ls-remote --exit-code origin refs/heads/main)
-    [[ ${remote%%$'\t'*} == "$1" ]] || die 'Pipeline obsolète : main a avancé. Utiliser sa dernière pipeline'
+    [[ ${remote%%$'\t'*} == "$1" ]] || die 'Pipeline obsolète : main a avancé. Lancer une nouvelle pipeline de main'
 }
