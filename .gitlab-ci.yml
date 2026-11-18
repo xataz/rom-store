@@ -16,8 +16,6 @@ stages: [prepare, check, test, build, release, publish]
 build-image:
   stage: prepare
   image: docker
-  variables:
-    DOCKER_HOST: tcp://docker-in-docker:2375
   script:
     - |
       cd .gitlab/ci
