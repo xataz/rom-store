@@ -16,5 +16,4 @@ RUN rustup component add rustfmt clippy
 RUN cargo install cargo-release --version 1.0.0 --locked \
     --no-default-features --features vendored-libgit2
 
-
 ENTRYPOINT []

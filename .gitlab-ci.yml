@@ -30,15 +30,14 @@ variables:
 build-env:
   extends: .base
   stage: prepare
-  image: quay.io/buildah/stable
-  resource_group: ci-env
-  variables:
-    STORAGE_DRIVER: vfs
-    BUILDAH_ISOLATION: chroot
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
   script:
-    - printf '%s' "$CI_REGISTRY_PASSWORD" | buildah login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    - buildah bud --layers -t "$CI_ENV_IMAGE" .gitlab/ci
-    - buildah push "$CI_ENV_IMAGE" "docker://$CI_ENV_IMAGE"
+    - /kaniko/executor
+      --context "${CI_PROJECT_DIR}/.gitlab"
+      --dockerfile "${CI_PROJECT_DIR}/.gitlab/ci/Dockerfile"
+      --destination "${CI_REGISTRY_IMAGE}/ci-env:${CI_COMMIT_REF_SLUG}"
   rules:
     # Pas de reconstruction sur les tags, les schedules ou les lancements manuels.
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
