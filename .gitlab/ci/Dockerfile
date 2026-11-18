@@ -5,5 +5,4 @@ RUN apt-get update && \
         build-essential ca-certificates curl git jq make pkg-config libssl-dev \
 	libsdl2-dev fonts-dejavu-core
 
-ENTRYPOINT ["/bin/bash"]
-
+ENTRYPOINT []

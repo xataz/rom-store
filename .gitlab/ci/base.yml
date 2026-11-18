@@ -1,5 +1,7 @@
 .rust:
-  image: build-romstore
+  image:
+    name: build-romstore
+    entrypoint: ['']
   timeout: 1h
   # Explicite pour inclure aussi les merge requests (jobs sans rules exclus des MR).
   rules:
