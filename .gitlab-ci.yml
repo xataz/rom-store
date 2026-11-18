@@ -17,6 +17,7 @@ workflow:
 stages: [prepare, check, test, build, release, publish]
 
 variables:
+  CI_ENV_IMAGE: $CI_REGISTRY_IMAGE/ci-env:latest
   RELEASE_COMPONENT:
     value: client
     options: [client, server]
@@ -27,62 +28,72 @@ variables:
     description: Incrément de version (modifiable dans le formulaire du job release).
 
 build-env:
+  extends: .base
   stage: prepare
   image: quay.io/buildah/stable
+  resource_group: ci-env
+  variables:
+    STORAGE_DRIVER: vfs
+    BUILDAH_ISOLATION: chroot
   script:
-    - buildah bud -t $CI_REGISTRY_IMAGE/ci-env:$CI_COMMIT_REF_SLUG -f .gitlab/ci/Dockerfile .
-    - buildah login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - buildah push $CI_REGISTRY_IMAGE/ci-env:$CI_COMMIT_REF_SLUG
+    - printf '%s' "$CI_REGISTRY_PASSWORD" | buildah login --username "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - buildah bud --layers -t "$CI_ENV_IMAGE" .gitlab/ci
+    - buildah push "$CI_ENV_IMAGE" "docker://$CI_ENV_IMAGE"
   rules:
-    # Ne reconstruit l'image que si le Dockerfile a changé !
-    - changes:
+    # Pas de reconstruction sur les tags, les schedules ou les lancements manuels.
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - .gitlab/ci/Dockerfile
+    # Sans compare_to, changes est toujours vrai au premier push d'une branche.
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH && $CI_COMMIT_BEFORE_SHA == "0000000000000000000000000000000000000000"'
+      changes:
+        compare_to: 'refs/heads/$CI_DEFAULT_BRANCH'
+        paths:
+          - .gitlab/ci/Dockerfile
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BEFORE_SHA != "0000000000000000000000000000000000000000")'
+      changes:
         - .gitlab/ci/Dockerfile
 
 check:
   extends: .rust
   stage: check
-  variables:
-    CI_SCRIPT:
-      expand: false
-      value: |
-        for crate in $CI_CRATES; do
-          cargo fmt --manifest-path "$crate/Cargo.toml" -- --check
-          cargo clippy --locked --manifest-path "$crate/Cargo.toml" --all-targets -- -D warnings
-        done
-        make test-ci
+  script:
+    - |
+      for crate in $CI_CRATES; do
+        cargo fmt --manifest-path "$crate/Cargo.toml" -- --check
+        cargo clippy --locked --manifest-path "$crate/Cargo.toml" --all-targets -- -D warnings
+      done
+    - make test-ci
 
 test:
   extends: .rust
   stage: test
-  variables:
-    CI_SCRIPT:
-      expand: false
-      value: |
-        if [ "$CI_COMPONENT" != client ]; then node --test server/tests/admin_ui.test.mjs; fi
-        for crate in $CI_CRATES; do
-          make "test-$crate"
-        done
+  script:
+    - if [ "$CI_COMPONENT" != client ]; then node --test server/tests/admin_ui.test.mjs; fi
+    - |
+      for crate in $CI_CRATES; do
+        make "test-$crate"
+      done
 
 build:
   extends: .rust
   stage: build
-  variables:
-    CI_SCRIPT:
-      expand: false
-      value: |
-        make "$CI_COMPONENT"
-        if [ "$CI_COMPONENT" = all ]; then
-          ROMSTORE_CLIENT="$PWD/client/target/release/romstore-client" \
-            cargo test --locked --manifest-path server/Cargo.toml --test e2e -- --ignored
-        fi
-        if [ "$CI_COMPONENT" != server ]; then
-          export SDL_VIDEODRIVER=dummy
-          client/target/release/romstore-client --smoke-test
-          cargo test --locked --manifest-path client/Cargo.toml --bin romstore-client \
-            sdl_text_rendering_refreshes_density_on_resize_and_bounds_the_cache -- --ignored
-        fi
-        mkdir -p dist
-        if [ -n "${CI_COMMIT_TAG:-}" ]; then bash scripts/ci/package.sh "$CI_COMMIT_TAG"; fi
+  script:
+    - make "$CI_COMPONENT"
+    - |
+      if [ "$CI_COMPONENT" = all ]; then
+        ROMSTORE_CLIENT="$PWD/client/target/release/romstore-client" \
+          cargo test --locked --manifest-path server/Cargo.toml --test e2e -- --ignored
+      fi
+    - |
+      if [ "$CI_COMPONENT" != server ]; then
+        export SDL_VIDEODRIVER=dummy
+        client/target/release/romstore-client --smoke-test
+        cargo test --locked --manifest-path client/Cargo.toml --bin romstore-client \
+          sdl_text_rendering_refreshes_density_on_resize_and_bounds_the_cache -- --ignored
+      fi
+    - mkdir -p dist
+    - if [ -n "${CI_COMMIT_TAG:-}" ]; then bash scripts/ci/package.sh "$CI_COMMIT_TAG"; fi
   artifacts:
     paths:
       - dist/
@@ -96,10 +107,8 @@ release-files:
   needs:
     - job: build
       artifacts: true
-  variables:
-    CI_SCRIPT:
-      expand: false
-      value: bash scripts/ci/package.sh "$CI_COMMIT_TAG" --release
+  script:
+    - bash scripts/ci/package.sh "$CI_COMMIT_TAG" --release
   artifacts:
     paths:
       - dist/$CI_COMMIT_TAG/
@@ -117,10 +126,8 @@ release:
   when: manual
   allow_failure: true
   manual_confirmation: Confirmer la création du commit de version et du tag sur main ?
-  variables:
-    CI_SCRIPT:
-      expand: false
-      value: bash scripts/ci/prepare-release.sh "$RELEASE_COMPONENT" "$RELEASE_TYPE" --push "$CI_COMMIT_SHA"
+  script:
+    - bash scripts/ci/prepare-release.sh "$RELEASE_COMPONENT" "$RELEASE_TYPE" --push "$CI_COMMIT_SHA"
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
 

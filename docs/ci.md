@@ -6,13 +6,11 @@ sans compilation croisée.
 ## Préparer GitLab et le runner
 
 1. Enregistrer un runner **Linux x86_64 avec exécuteur Docker**, tagué `self`.
-   Monter `/var/run/docker.sock` dans les conteneurs de jobs. Les jobs construisent
-   et exécutent leur image avec le démon Docker de l'hôte ; aucun mode privilégié
-   ni service Docker-in-Docker n'est nécessaire. Le hostname du conteneur de job
-   doit rester son identifiant Docker par défaut : `--volumes-from "$HOSTNAME"`
-   partage son checkout et son cache avec le conteneur de compilation.
-   **Réserver ce runner aux projets de confiance** : le socket donne accès à l'hôte.
-2. Autoriser les images `docker:27-cli`, `rust:1.100-bookworm`,
+   Le job `build-env` utilise Buildah (`vfs`, isolation `chroot`) : configurer
+   les permissions et profils de sécurité du runner pour autoriser Buildah.
+   Aucun socket Docker ni service Docker-in-Docker n'est utilisé par les jobs.
+2. Activer le **Container Registry** du projet et autoriser ses images, ainsi que
+   `quay.io/buildah/stable`, `rust:1.100-bookworm`,
    `node:22-bookworm-slim`, `orhunp/git-cliff:2.10.1` et
    `registry.gitlab.com/gitlab-org/cli:v1.76.0`, les accès aux dépôts Debian/Alpine,
    à Cargo et à l'API GitLab. Le mot-clé `release:` nécessite un GitLab/Runner récent
@@ -69,11 +67,24 @@ toujours les sources de son ancien commit.
 
 L'image de compilation est Debian 12 Bookworm, avec Node 22, **Rust 1.100**,
 Clippy, rustfmt, SDL2, les polices, `cargo-release` et `git-cliff`.
-Le template `.rust` construit cette image au début des jobs qui l'utilisent,
-puis exécute leur paramètre `CI_SCRIPT` dedans. Il n'y a pas de job `build-image`
-ni d'image locale à préparer à l'avance. Le contexte est limité à `.gitlab/ci` :
-le cache Docker réutilise les couches tant que leur définition ne change pas.
-Ce cache est propre à chaque hôte et doit être conservé entre les jobs.
+Le job `build-env`, dans le stage `prepare`, construit cette image avec Buildah
+et la pousse vers **`$CI_REGISTRY_IMAGE/ci-env:latest`**. L'authentification utilise
+`CI_REGISTRY_USER` et `CI_REGISTRY_PASSWORD`, sans jeton supplémentaire.
+Il ne s'exécute que si `.gitlab/ci/Dockerfile` change dans un push de branche ou
+une merge request. Pour une nouvelle branche, la comparaison se fait avec la
+branche par défaut, afin de ne pas reconstruire sans modification du Dockerfile.
+Les tags et les pipelines manuelles ou planifiées ne reconstruisent pas l'image.
+Le contexte de build est limité à `.gitlab/ci`.
+
+Le template `.rust` utilise directement cette image du registry, avec une
+politique de téléchargement `always`. Le tag partagé permet aux branches et aux
+tags de release de l'utiliser même si leur pipeline n'exécute pas `build-env`.
+Une modification du Dockerfile sur une branche ou une MR remplace donc aussi
+cette image partagée ; réserver ces modifications aux contributeurs de confiance.
+Les constructions sont sérialisées par `resource_group: ci-env`.
+L'image doit déjà exister pour une pipeline sans modification du Dockerfile :
+au premier déploiement, pousser une modification du Dockerfile ou construire et
+pousser cette image une fois manuellement.
 Les outils sont installés dans l'image, pas sur l'hôte.
 Le cache GitLab conserve le registre et les dépôts Cargo, pas les `target`.
 Configurer le cache distribué du runner si les jobs tournent sur plusieurs machines.
@@ -101,7 +112,7 @@ nécessiter une version de Rust plus récente que celle du projet.
 ## Pipeline de branche / merge request
 
 ```text
-check → test → build → release (main uniquement)
+build-env (si Dockerfile modifié) → check → test → build → release (main uniquement)
 ```
 
 - **check** : formatage Rust, Clippy avec avertissements interdits et `make test-ci`

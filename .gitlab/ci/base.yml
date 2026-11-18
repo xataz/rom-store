@@ -4,14 +4,15 @@
 
 .rust:
   extends: .base
-  image: $CI_REGISTRY_IMAGE/ci-env:$CI_COMMIT_REF_SLUG
+  image:
+    name: $CI_ENV_IMAGE
+    pull_policy: always
   timeout: 1h
   # Explicite pour inclure aussi les merge requests (jobs sans rules exclus des MR).
   rules:
     - when: on_success
   variables:
     GIT_DEPTH: '0'
-    DOCKER_HOST: unix:///var/run/docker.sock
     CARGO_HOME: $CI_PROJECT_DIR/.cargo
     CARGO_TERM_COLOR: always
     RUST_BACKTRACE: '1'
@@ -24,3 +25,14 @@
     paths:
       - .cargo/registry/
       - .cargo/git/
+  before_script:
+    - |
+      set -eu
+      CI_COMPONENT=all
+      case "${CI_COMMIT_TAG:-}" in
+        client-v*) CI_COMPONENT=client ;;
+        server-v*) CI_COMPONENT=server ;;
+      esac
+      CI_CRATES="$CI_COMPONENT"
+      if [ "$CI_COMPONENT" = all ]; then CI_CRATES='client server'; fi
+      export CI_COMPONENT CI_CRATES
