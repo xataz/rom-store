@@ -11,7 +11,17 @@ workflow:
       when: never
     - if: '$CI_COMMIT_BRANCH'
 
-stages: [check, test, build, release, publish]
+stages: [prepare, check, test, build, release, publish]
+
+build-image:
+  stage: prepare
+  image: docker
+  variables:
+    DOCKER_HOST: tcp://docker-in-docker:2375
+  script:
+    - |
+      cd .gitlab/ci
+      docker build -t build-romstore .
 
 check:
   extends: .rust
@@ -80,7 +90,7 @@ notes:
     - if: '$CI_COMMIT_TAG =~ /^(client|server)-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$/'
 
 generate-releases:
-  image: node:22-bookworm
+  image: build-romstore
   stage: build
   variables:
     GIT_DEPTH: '0'
