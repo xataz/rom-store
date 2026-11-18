@@ -12,6 +12,8 @@ variables:
 
 default:
   image: rust:1.100
+  before_script:
+    - apt update && apt install cmake -y
   cache:
     key: cargo
     paths:
