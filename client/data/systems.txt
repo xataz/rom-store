@@ -53,10 +53,10 @@ mastersystem: Sega Master System/Mark III
 fds: Family Computer Disk System/Famicom
 atari7800: Atari 7800
 socrates: Socrates/Prof. Weiss-Alles/Professeur Saitout
-pcengine: PC Engine/TurboGrafx-16
+pcengine: NEC PC Engine/TurboGrafx-16
 megadrive: Sega Genesis/Mega Drive
-pcenginecd: PC Engine CD-ROM²/TurboGrafx-CD/TurboDuo
-supergrafx: PC Engine SuperGrafx
+pcenginecd: NEC PC Engine CD-ROM²/TurboGrafx-CD/TurboDuo
+supergrafx: NEC PC Engine SuperGrafx
 snes: Super Nintendo Entertainment System
 neogeo: Neo Geo
 cdi: Compact Disc Interactive/CD-i
@@ -129,10 +129,10 @@ gba: Game Boy Advance
 pokemini: Pokémon Mini
 gp32: GP32
 nds: Nintendo DS
-psp: PlayStation Portable
+psp: Sony PlayStation Portable
 3ds: Nintendo 3DS
 switch: Nintendo Switch
-psvita: PlayStation_Vita
+psvita: Sony PlayStation Vita
 arduboy: Arduboy
 
 # Home computer
