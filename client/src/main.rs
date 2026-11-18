@@ -49,6 +49,7 @@ enum Message {
     Reloaded(u64, Result<(ReloadStatus, Vec<System>)>),
     Systems(u64, Result<Vec<System>>),
     Games(u64, usize, Result<Page>),
+    CatalogueJump(u64, usize, Result<Page>),
     Letter(u64, char, Result<Option<(Page, usize)>>),
     FilterFields(u64, Result<Vec<String>>),
     FrontendRefreshed(Result<()>),
@@ -71,6 +72,7 @@ enum Screen {
 }
 
 struct Job {
+    id: usize,
     kind: JobKind,
     game_id: String,
     name: String,
@@ -155,19 +157,36 @@ fn media_file<'a>(game: &'a Game, role: &str) -> Option<&'a File> {
 }
 
 fn move_selection(index: usize, len: usize, action: Action, view: ViewMode) -> usize {
+    move_grid_selection(
+        index,
+        len,
+        action,
+        if view == ViewMode::Grid {
+            GRID_COLUMNS
+        } else {
+            1
+        },
+    )
+}
+
+fn move_grid_selection(index: usize, len: usize, action: Action, columns: usize) -> usize {
     if len == 0 {
         return 0;
     }
     let index = index.min(len - 1);
-    match (action, view) {
-        (Action::Up, ViewMode::Grid) if index >= GRID_COLUMNS => index - GRID_COLUMNS,
-        (Action::Down, ViewMode::Grid) if index / GRID_COLUMNS < (len - 1) / GRID_COLUMNS => {
-            (index + GRID_COLUMNS).min(len - 1)
+    match action {
+        Action::Up if index >= columns => index - columns,
+        Action::Up => (((len - 1) / columns) * columns + index % columns).min(len - 1),
+        Action::Down if index / columns < (len - 1) / columns => (index + columns).min(len - 1),
+        Action::Down => index % columns,
+        Action::Left if columns > 1 => {
+            if index == 0 {
+                len - 1
+            } else {
+                index - 1
+            }
         }
-        (Action::Left, ViewMode::Grid) | (Action::Up, ViewMode::List) => index.saturating_sub(1),
-        (Action::Right, ViewMode::Grid) | (Action::Down, ViewMode::List) => {
-            (index + 1).min(len - 1)
-        }
+        Action::Right if columns > 1 => (index + 1) % len,
         _ => index,
     }
 }
@@ -203,6 +222,7 @@ struct App {
     game_index: usize,
     detail: Option<Game>,
     queue_index: usize,
+    next_job_id: usize,
     jobs: Vec<Job>,
     status: String,
     quit_requested: bool,
@@ -515,6 +535,121 @@ impl App {
         }
     }
 
+    fn navigate_games(&mut self, action: Action) {
+        let Some(page) = &self.page else {
+            return;
+        };
+        if page.items.is_empty() {
+            return;
+        }
+        let current = page.offset + self.game_index;
+        let target = move_selection(current, page.total, action, self.config.games_view);
+        let wrapping = match action {
+            Action::Up | Action::Left => target > current,
+            Action::Down | Action::Right => target < current,
+            _ => false,
+        };
+        if target >= page.offset && target < page.offset + page.items.len() {
+            let previous = self.game_index;
+            self.game_index = target - page.offset;
+            if previous != self.game_index {
+                self.load_thumbnails();
+                self.load_preview();
+            }
+            self.load_more();
+        } else if !wrapping {
+            // At a loaded-page boundary keep the current row until scrolling
+            // finishes, rather than cancelling and duplicating its request.
+            self.load_more();
+        } else {
+            // Navigate over the entire filtered catalogue, not only loaded pages.
+            // Invalidate any scroll request that was already in flight.
+            self.catalog_generation += 1;
+            self.catalog_pending = None;
+            self.loading = true;
+            let (api, config, tx, generation, system, query, filters) = (
+                self.api.clone(),
+                self.config.clone(),
+                self.tx.clone(),
+                self.catalog_generation,
+                self.catalog_system.clone(),
+                self.search_query.clone(),
+                self.filters.clone(),
+            );
+            thread::spawn(move || {
+                let result = api
+                    .games_filtered(system.as_deref(), target / 50 * 50, &query, &filters)
+                    .map(|mut page| {
+                        for game in &mut page.items {
+                            game.installed = config.rom_exists(&game.system, &game.path);
+                        }
+                        page
+                    });
+                let _ = tx.send(Message::CatalogueJump(generation, target, result));
+            });
+        }
+    }
+
+    fn receive_catalogue_jump(
+        &mut self,
+        generation: u64,
+        target: usize,
+        result: Result<Page>,
+    ) -> bool {
+        if generation != self.catalog_generation {
+            return false;
+        }
+        self.loading = false;
+        match result {
+            Ok(mut page) if target >= page.offset && target - page.offset < page.items.len() => {
+                for game in &mut page.items {
+                    game.installed = self.config.rom_exists(&game.system, &game.path);
+                }
+                self.game_index = target - page.offset;
+                self.page = Some(page);
+                self.status = self.config.language.text("navigation_hint").into();
+                true
+            }
+            result => {
+                let detail = result.err().map_or_else(
+                    || "Catalogue modifié pendant la navigation".into(),
+                    |error| format!("{error:#}"),
+                );
+                self.status = self.config.language.format("scroll_retry", &[&detail]);
+                false
+            }
+        }
+    }
+
+    fn focus_current_job(&mut self) {
+        self.queue_index = self
+            .jobs
+            .iter()
+            .position(|job| !job.done && job.started.is_some() && job.kind == JobKind::Install)
+            .or_else(|| {
+                self.jobs
+                    .iter()
+                    .position(|job| !job.done && job.started.is_some())
+            })
+            .or_else(|| self.jobs.iter().position(|job| !job.done))
+            .unwrap_or_else(|| self.queue_index.min(self.jobs.len().saturating_sub(1)));
+    }
+
+    fn clear_completed_jobs(&mut self) {
+        let selected = self.jobs.get(self.queue_index).map(|job| job.id);
+        let count = self.jobs.len();
+        self.jobs.retain(|job| !job.done);
+        if let Some(index) = self.jobs.iter().position(|job| Some(job.id) == selected) {
+            self.queue_index = index;
+        } else {
+            self.focus_current_job();
+        }
+        self.status = self
+            .config
+            .language
+            .format("queue_cleaned", &[&(count - self.jobs.len())]);
+    }
+
     fn receive_games(&mut self, generation: u64, offset: usize, result: Result<Page>) -> bool {
         if generation != self.catalog_generation || self.catalog_pending != Some(offset) {
             return false;
@@ -525,13 +660,8 @@ impl App {
             Ok(mut batch) if batch.offset == offset => {
                 // A download can finish while this batch is still in flight.
                 for game in &mut batch.items {
-                    if self
-                        .jobs
-                        .iter()
-                        .any(|job| job.game_id == game.id && job.done)
-                    {
-                        game.installed = self.config.rom_exists(&game.system, &game.path);
-                    }
+                    // History may already have been cleared; disk remains authoritative.
+                    game.installed = self.config.rom_exists(&game.system, &game.path);
                 }
                 // An empty batch ends scrolling even if the server total is stale.
                 if batch.items.is_empty() {
@@ -707,8 +837,9 @@ impl App {
             return Ok(());
         }
         let cancel = Arc::new(AtomicBool::new(false));
-        let id = self.jobs.len();
+        let id = self.next_job_id;
         let job = Job {
+            id,
             kind,
             game_id: game.id.clone(),
             name: if kind == JobKind::Uninstall {
@@ -730,6 +861,7 @@ impl App {
         self.installer
             .send((id, operation, cancel, self.api.clone(), self.config.clone()))?;
         self.jobs.push(job);
+        self.next_job_id += 1;
         self.status = self.config.language.text("queued_hint").into();
         Ok(())
     }
@@ -930,6 +1062,9 @@ impl App {
             {
                 self.download_selected()
             }
+            Action::DownloadSelection if self.screen == Screen::Queue => {
+                self.clear_completed_jobs()
+            }
             Action::Alphabet
                 if matches!(self.screen, Screen::Systems | Screen::Games) && !self.loading =>
             {
@@ -972,14 +1107,7 @@ impl App {
                 if matches!(self.screen, Screen::Systems | Screen::Games) && !self.loading =>
             {
                 if self.screen == Screen::Games {
-                    let len = self.page.as_ref().map_or(0, |page| page.items.len());
-                    let previous = self.game_index;
-                    self.game_index = move_selection(previous, len, action, self.config.games_view);
-                    if previous != self.game_index {
-                        self.load_thumbnails();
-                        self.load_preview();
-                    }
-                    self.load_more();
+                    self.navigate_games(action);
                 } else {
                     let previous = self.system_index;
                     self.system_index = move_selection(
@@ -1003,13 +1131,7 @@ impl App {
                     Screen::Queue => (&mut self.queue_index, self.jobs.len()),
                     _ => return Ok(true),
                 };
-                if len > 0 {
-                    *index = if action == Action::Up {
-                        index.saturating_sub(1)
-                    } else {
-                        (*index + 1).min(len - 1)
-                    };
-                }
+                *index = move_selection(*index, len, action, ViewMode::List);
             }
             Action::Confirm => match self.screen {
                 Screen::Systems if !self.loading => {
@@ -1139,6 +1261,12 @@ impl App {
                     }
                 }
             }
+            Message::CatalogueJump(generation, target, result) => {
+                if self.receive_catalogue_jump(generation, target, result) {
+                    self.load_thumbnails();
+                    self.load_preview();
+                }
+            }
             Message::Letter(generation, letter, result)
                 if generation == self.catalog_generation =>
             {
@@ -1146,13 +1274,7 @@ impl App {
                 match result {
                     Ok(Some((mut page, index))) => {
                         for game in &mut page.items {
-                            if self
-                                .jobs
-                                .iter()
-                                .any(|job| job.game_id == game.id && job.done)
-                            {
-                                game.installed = self.config.rom_exists(&game.system, &game.path);
-                            }
+                            game.installed = self.config.rom_exists(&game.system, &game.path);
                         }
                         self.page = Some(page);
                         self.game_index = index;
@@ -1197,7 +1319,7 @@ impl App {
                 }
             }
             Message::Started(id) => {
-                if let Some(job) = self.jobs.get_mut(id) {
+                if let Some(job) = self.jobs.iter_mut().find(|job| job.id == id) {
                     job.started = Some(Instant::now());
                     job.state = self
                         .config
@@ -1211,7 +1333,7 @@ impl App {
                 }
             }
             Message::Progress(id, progress) => {
-                if let Some(job) = self.jobs.get_mut(id) {
+                if let Some(job) = self.jobs.iter_mut().find(|job| job.id == id) {
                     job.progress = Some(progress);
                 }
             }
@@ -1222,7 +1344,7 @@ impl App {
     }
 
     fn finish_job(&mut self, id: usize, result: Result<()>) {
-        if let Some(job) = self.jobs.get_mut(id) {
+        if let Some(job) = self.jobs.iter_mut().find(|job| job.id == id) {
             job.done = true;
             job.succeeded = result.is_ok();
             job.state = match result {
@@ -1267,7 +1389,12 @@ impl App {
             };
             self.status = job.state.clone();
         }
-        if let Some(game_id) = self.jobs.get(id).map(|job| job.game_id.clone()) {
+        if let Some(game_id) = self
+            .jobs
+            .iter()
+            .find(|job| job.id == id)
+            .map(|job| job.game_id.clone())
+        {
             self.refresh_local_presence(&game_id);
         }
     }
@@ -1300,8 +1427,9 @@ impl App {
         let menu = self.menu.as_mut().unwrap();
         menu.selected = menu.selected.min(items.len() - 1);
         match action {
-            Action::Up => menu.selected = menu.selected.saturating_sub(1),
-            Action::Down => menu.selected = (menu.selected + 1).min(items.len() - 1),
+            Action::Up | Action::Down => {
+                menu.selected = move_selection(menu.selected, items.len(), action, ViewMode::List)
+            }
             Action::Back => self.menu = None,
             Action::Confirm | Action::Left | Action::Right => {
                 let item = items[menu.selected];
@@ -1320,6 +1448,7 @@ impl App {
                             self.before_queue = self.screen;
                         }
                         self.screen = Screen::Queue;
+                        self.focus_current_job();
                     }
                     MenuItem::AdvancedSearch => {
                         self.menu = None;
@@ -1861,6 +1990,7 @@ fn main() -> Result<()> {
         game_index: 0,
         detail: None,
         queue_index: 0,
+        next_job_id: 0,
         jobs: Vec::new(),
         status: String::new(),
         quit_requested: false,
@@ -2165,6 +2295,7 @@ mod tests {
             game_index: 0,
             detail: None,
             queue_index: 0,
+            next_job_id: 0,
             jobs: Vec::new(),
             status: String::new(),
             quit_requested: false,
@@ -2518,6 +2649,7 @@ mod tests {
         let mut app = app();
         let cancel = Arc::new(AtomicBool::new(false));
         app.jobs.push(Job {
+            id: 0,
             kind: JobKind::Install,
             game_id: "a".repeat(64),
             name: "Demo".into(),
@@ -2638,6 +2770,113 @@ mod tests {
     }
 
     #[test]
+    fn lists_grids_and_menus_wrap_at_both_ends() {
+        for len in [0_usize, 1, 2, 5, 12] {
+            let last = len.saturating_sub(1);
+            assert_eq!(move_selection(0, len, Action::Up, ViewMode::List), last);
+            assert_eq!(move_selection(last, len, Action::Down, ViewMode::List), 0);
+        }
+        assert_eq!(move_selection(2, 12, Action::Up, ViewMode::Grid), 11);
+        assert_eq!(move_selection(11, 12, Action::Down, ViewMode::Grid), 1);
+        assert_eq!(move_selection(0, 12, Action::Left, ViewMode::Grid), 11);
+        assert_eq!(move_selection(11, 12, Action::Right, ViewMode::Grid), 0);
+        let mut app = app();
+        app.menu = Some(Menu::default());
+        app.action(Action::Up).unwrap();
+        assert_eq!(
+            app.menu.as_ref().unwrap().selected,
+            Menu::items(false).len() - 1
+        );
+        app.action(Action::Down).unwrap();
+        assert_eq!(app.menu.as_ref().unwrap().selected, 0);
+        app.menu = None;
+        app.config.systems_view = ViewMode::List;
+        app.systems = vec![nes(), nes()];
+        app.action(Action::Up).unwrap();
+        assert_eq!(app.system_index, 1);
+        app.action(Action::Down).unwrap();
+        assert_eq!(app.system_index, 0);
+    }
+
+    #[test]
+    fn catalogue_wrap_fetches_the_real_last_page_and_rejects_stale_results() {
+        let mut app = app();
+        app.screen = Screen::Games;
+        app.config.games_view = ViewMode::List;
+        app.page = Some(batch(0, 50, 123));
+        app.selection.toggle(smoke_page().items.remove(0));
+        app.catalog_pending = Some(50);
+        app.action(Action::Up).unwrap();
+        assert!(app.loading);
+        assert!(app.catalog_pending.is_none());
+        assert!(!app.receive_games(0, 50, Ok(batch(50, 50, 123))));
+        assert!(!app.receive_catalogue_jump(0, 122, Ok(batch(100, 23, 123))));
+        assert!(app.receive_catalogue_jump(1, 122, Ok(batch(100, 23, 123))));
+        assert_eq!(app.game_index, 22);
+        assert_eq!(app.page.as_ref().unwrap().offset, 100);
+        assert_eq!(app.selection.games.len(), 1);
+        app.action(Action::Down).unwrap();
+        assert!(app.loading);
+        assert!(app.receive_catalogue_jump(2, 0, Ok(batch(0, 50, 123))));
+        assert_eq!(app.game_index, 0);
+        assert_eq!(app.page.as_ref().unwrap().offset, 0);
+        assert!(!app.receive_catalogue_jump(2, 122, Err(anyhow!("offline"))));
+        assert!(!app.loading);
+        assert_eq!(app.page.as_ref().unwrap().offset, 0);
+    }
+
+    #[test]
+    fn queue_focus_cleanup_and_worker_ids_survive_history_removal() {
+        let mut app = app();
+        let (installer, requests) = mpsc::channel();
+        app.installer = installer;
+        for index in [0, 1, 3, 4] {
+            app.enqueue_job(smoke_page().items.remove(index), JobKind::Install)
+                .unwrap();
+        }
+        let ids: Vec<_> = requests.try_iter().map(|request| request.0).collect();
+        assert_eq!(ids, [0, 1, 2, 3]);
+        app.finish_job(0, Ok(()));
+        app.finish_job(1, Err(anyhow!("failed")));
+        app.jobs[2].started = Some(Instant::now());
+        choose_menu(&mut app, MenuItem::Downloads);
+        assert_eq!(app.queue_index, 2);
+        app.action(Action::DownloadSelection).unwrap();
+        assert_eq!(
+            app.jobs.iter().map(|job| job.id).collect::<Vec<_>>(),
+            [2, 3]
+        );
+        assert_eq!(app.queue_index, 0);
+        assert!(app
+            .jobs
+            .iter()
+            .all(|job| !job.cancel.load(Ordering::Relaxed)));
+        app.action(Action::Up).unwrap();
+        assert_eq!(app.queue_index, 1);
+        app.action(Action::Down).unwrap();
+        assert_eq!(app.queue_index, 0);
+        app.finish_job(0, Ok(())); // Late message for deleted history is ignored.
+        assert!(app.jobs.iter().all(|job| !job.done));
+        app.finish_job(2, Ok(()));
+        assert!(app.jobs[0].succeeded);
+        assert!(!app.jobs[1].done);
+        app.action(Action::DownloadSelection).unwrap();
+        assert_eq!(app.jobs[0].id, 3);
+        assert_eq!(app.queue_index, 0);
+        app.finish_job(3, Ok(()));
+        app.action(Action::DownloadSelection).unwrap();
+        assert!(app.jobs.is_empty());
+        assert_eq!(app.queue_index, 0);
+        app.action(Action::DownloadSelection).unwrap();
+        app.enqueue_job(smoke_page().items.remove(0), JobKind::Install)
+            .unwrap();
+        assert_eq!(requests.try_recv().unwrap().0, 4);
+        assert_eq!(app.jobs[0].id, 4);
+        app.focus_current_job(); // Waiting task is selected when none is running.
+        assert_eq!(app.queue_index, 0);
+    }
+
+    #[test]
     fn empty_navigation_is_safe() {
         let mut app = app();
         assert!(app.action(Action::Up).unwrap());
@@ -2654,6 +2893,8 @@ mod tests {
         app.action(Action::Right).unwrap();
         assert_eq!(app.game_index, 1);
         app.action(Action::Up).unwrap();
+        assert_eq!(app.game_index, 11);
+        app.action(Action::Down).unwrap();
         assert_eq!(app.game_index, 1);
         app.action(Action::Down).unwrap();
         assert_eq!(app.game_index, 6);
@@ -2662,10 +2903,11 @@ mod tests {
         assert_eq!(app.game_index, 11);
         assert_eq!(grid_start(app.game_index), 5);
         app.action(Action::Right).unwrap();
+        assert_eq!(app.game_index, 0);
         app.action(Action::Down).unwrap();
-        assert_eq!(app.game_index, 11);
+        assert_eq!(app.game_index, 5);
         app.action(Action::Up).unwrap();
-        assert_eq!(app.game_index, 6);
+        assert_eq!(app.game_index, 0);
         app.game_index = 9;
         app.action(Action::Down).unwrap();
         assert_eq!(app.game_index, 11);

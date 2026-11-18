@@ -121,7 +121,9 @@ transfer_done: Transfer completed
 transfer_interrupted: Transfer interrupted
 transfer_pending: Waiting to start
 transfer_speed: "{0} MiB/s on average"
-collection_accessible: Press Tab to return to the collection.
+collection_accessible: B / Backspace to return to the collection.
+queue_clean: Clear finished tasks
+queue_cleaned: "Finished tasks removed from the list: {0}"
 navigate: Navigate
 enter_key: Enter / A
 install: Install
@@ -144,7 +146,7 @@ loading_catalog: Loading the catalogue…
 add_to_queue_hint: Confirm to add to the download queue
 game_unavailable: Game unavailable
 already_queued: This game is already queued
-queued_hint: Added to queue — open with Menu / Tab
+queued_hint: Added to queue — open via Menu → Downloads
 closing: "Closing: cancelling tasks and waiting for writes to finish…"
 cancel_requested: Cancellation requested…
 empty_catalog: Empty catalogue — check gamelist.xml files, then confirm to retry

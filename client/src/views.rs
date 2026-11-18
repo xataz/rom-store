@@ -1072,6 +1072,14 @@ impl App {
             l.text(if selecting { "cancel" } else { "back" }),
             x,
         )?;
+        if self.screen == Screen::Queue {
+            painter.hint(
+                canvas,
+                l.text("selection_download_key"),
+                l.text("queue_clean"),
+                x,
+            )?;
+        }
         if selecting {
             x = painter.hint(
                 canvas,
@@ -1105,6 +1113,7 @@ mod tests {
     #[test]
     fn notification_only_counts_downloads_and_never_promotes_waiting_jobs() {
         let job = |kind, done, started| Job {
+            id: 0,
             kind,
             done,
             started,
@@ -1132,6 +1141,7 @@ mod tests {
     #[test]
     fn progress_is_bounded_even_for_inconsistent_server_totals() {
         let mut job = Job {
+            id: 0,
             kind: JobKind::Install,
             game_id: String::new(),
             name: String::new(),

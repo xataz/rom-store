@@ -144,12 +144,9 @@ impl SearchDialog {
         let count = self.key_count();
         let columns = self.columns();
         match action {
-            Action::Up if self.selected >= columns => self.selected -= columns,
-            Action::Down if self.selected / columns < (count - 1) / columns => {
-                self.selected = (self.selected + columns).min(count - 1)
+            Action::Up | Action::Down | Action::Left | Action::Right => {
+                self.selected = crate::move_grid_selection(self.selected, count, action, columns);
             }
-            Action::Left => self.selected = self.selected.saturating_sub(1),
-            Action::Right => self.selected = (self.selected + 1).min(count - 1),
             Action::Confirm => {
                 if let Some(char) = self.characters().chars().nth(self.selected) {
                     self.append(&if self.uppercase {
@@ -333,6 +330,19 @@ impl SearchDialog {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn controller_keyboard_wraps_at_the_edges() {
+        let mut dialog = SearchDialog::entry(String::new(), KeyboardMode::Text, 256);
+        dialog.action(Action::Left);
+        assert_eq!(dialog.selected, dialog.key_count() - 1);
+        dialog.action(Action::Right);
+        assert_eq!(dialog.selected, 0);
+        dialog.action(Action::Up);
+        assert!(dialog.selected >= (dialog.key_count() - 1) / dialog.columns() * dialog.columns());
+        dialog.action(Action::Down);
+        assert_eq!(dialog.selected, 0);
+    }
 
     #[test]
     fn numeric_keypads_reject_letters_from_both_typing_and_paste() {

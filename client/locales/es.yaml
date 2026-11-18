@@ -121,7 +121,9 @@ transfer_done: Transferencia finalizada
 transfer_interrupted: Transferencia interrumpida
 transfer_pending: Pendiente de inicio
 transfer_speed: "{0} MiB/s de media"
-collection_accessible: Pulsa Tab para volver a la colección.
+collection_accessible: B / Retroceso para volver a la colección.
+queue_clean: Borrar tareas terminadas
+queue_cleaned: "Tareas terminadas retiradas de la lista: {0}"
 navigate: Navegar
 enter_key: Intro / A
 install: Instalar
@@ -144,7 +146,7 @@ loading_catalog: Cargando el catálogo…
 add_to_queue_hint: Confirma para añadir a la cola de descargas
 game_unavailable: Juego no disponible
 already_queued: Este juego ya está en la cola
-queued_hint: Añadido a la cola — abrir con Menú / Tab
+queued_hint: Añadido a la cola — abrir desde Menú → Descargas
 closing: "Cerrando: cancelando tareas y esperando a que terminen las escrituras…"
 cancel_requested: Cancelación solicitada…
 empty_catalog: Catálogo vacío — revisa los archivos gamelist.xml y confirma para reintentar

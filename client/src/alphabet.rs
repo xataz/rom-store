@@ -29,12 +29,10 @@ impl AlphabetDialog {
 
     pub fn action(&mut self, action: Action) -> Option<Outcome> {
         match action {
-            Action::Up if self.selected >= COLUMNS => self.selected -= COLUMNS,
-            Action::Down if self.selected / COLUMNS < (LETTERS.len() - 1) / COLUMNS => {
-                self.selected = (self.selected + COLUMNS).min(LETTERS.len() - 1)
+            Action::Up | Action::Down | Action::Left | Action::Right => {
+                self.selected =
+                    crate::move_grid_selection(self.selected, LETTERS.len(), action, COLUMNS);
             }
-            Action::Left => self.selected = self.selected.saturating_sub(1),
-            Action::Right => self.selected = (self.selected + 1).min(LETTERS.len() - 1),
             Action::Confirm => {
                 return Some(Outcome::Select(LETTERS.as_bytes()[self.selected] as char))
             }
@@ -106,29 +104,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn controller_selection_is_bounded_and_can_cancel() {
+    fn controller_selection_wraps_and_can_cancel() {
         let mut dialog = AlphabetDialog::new("Nintendo Switch");
         assert!(matches!(
             dialog.action(Action::Confirm),
             Some(Outcome::Select('N'))
         ));
-        for _ in 0..50 {
-            dialog.action(Action::Right);
-        }
-        assert!(matches!(
-            dialog.action(Action::Confirm),
-            Some(Outcome::Select('Z'))
-        ));
-        for _ in 0..50 {
-            dialog.action(Action::Up);
-        }
-        for _ in 0..50 {
-            dialog.action(Action::Left);
-        }
+        dialog = AlphabetDialog::new("Z");
+        dialog.action(Action::Right);
         assert!(matches!(
             dialog.action(Action::Confirm),
             Some(Outcome::Select('0'))
         ));
+        dialog.action(Action::Left);
+        assert!(matches!(
+            dialog.action(Action::Confirm),
+            Some(Outcome::Select('Z'))
+        ));
+        dialog.action(Action::Down);
+        assert!(dialog.selected < COLUMNS);
+        dialog.action(Action::Up);
+        assert_eq!(dialog.selected, LETTERS.len() - 1);
         assert!(matches!(dialog.action(Action::Back), Some(Outcome::Cancel)));
     }
 

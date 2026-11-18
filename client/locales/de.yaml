@@ -121,7 +121,9 @@ transfer_done: Übertragung abgeschlossen
 transfer_interrupted: Übertragung unterbrochen
 transfer_pending: Wartet auf den Start
 transfer_speed: "{0} MiB/s im Durchschnitt"
-collection_accessible: Mit Tab zurück zur Sammlung.
+collection_accessible: B / Rücktaste führt zurück zur Sammlung.
+queue_clean: Beendete Aufgaben entfernen
+queue_cleaned: "Beendete Aufgaben aus der Liste entfernt: {0}"
 navigate: Navigieren
 enter_key: Eingabe / A
 install: Installieren
@@ -144,7 +146,7 @@ loading_catalog: Katalog wird geladen…
 add_to_queue_hint: Bestätigen, um das Spiel einzureihen
 game_unavailable: Spiel nicht verfügbar
 already_queued: Dieses Spiel ist bereits eingereiht
-queued_hint: Eingereiht — mit Menü / Tab öffnen
+queued_hint: Eingereiht — über Menü → Downloads öffnen
 closing: "Beenden: Aufgaben werden abgebrochen, Schreibvorgänge werden abgeschlossen…"
 cancel_requested: Abbruch angefordert…
 empty_catalog: Leerer Katalog — gamelist.xml prüfen und zum Wiederholen bestätigen

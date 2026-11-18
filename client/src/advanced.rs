@@ -145,8 +145,9 @@ impl AdvancedDialog {
         }
         let count = self.fields.len() + 3;
         match action {
-            Action::Up => self.selected = self.selected.saturating_sub(1),
-            Action::Down => self.selected = (self.selected + 1).min(count - 1),
+            Action::Up | Action::Down => {
+                self.selected = crate::move_grid_selection(self.selected, count, action, 1)
+            }
             Action::Left | Action::Right if self.selected == 0 => {
                 self.cycle_platform(action == Action::Right)
             }
@@ -264,6 +265,15 @@ impl AdvancedDialog {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn form_navigation_wraps() {
+        let mut form = AdvancedDialog::new(&[], None, "", &Default::default());
+        form.action(Action::Up);
+        assert_eq!(form.selected, form.fields.len() + 2);
+        form.action(Action::Down);
+        assert_eq!(form.selected, 0);
+    }
 
     #[test]
     fn form_edits_custom_fields_with_the_controller_and_clears_all_criteria() {

@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub const SCENES: usize = 46;
+pub const SCENES: usize = 48;
 
 fn media(id: char, role: &str) -> File {
     File {
@@ -222,6 +222,7 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
             .enumerate()
             {
                 app.jobs.push(Job {
+                    id: app.jobs.len(),
                     kind: JobKind::Install,
                     game_id: format!("{index:064x}"),
                     name: (*name).into(),
@@ -365,6 +366,7 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
             app.screen = Screen::Queue;
             app.queue_index = app.jobs.len();
             app.jobs.push(Job {
+                id: app.jobs.len(),
                 kind: JobKind::Uninstall,
                 game_id: "0".repeat(64),
                 name: l.format("uninstall_job", &[&"Les voyageurs de l'aube"]),
@@ -418,6 +420,7 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
                 job.done = true;
             }
             app.jobs.push(Job {
+                id: app.jobs.len(),
                 kind: JobKind::Install,
                 game_id: "8".repeat(64),
                 name: "Les voyageurs de l'aube".into(),
@@ -489,6 +492,7 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
         42 | 43 => {
             if frame == 42 {
                 app.jobs.push(Job {
+                    id: app.jobs.len(),
                     kind: JobKind::Install,
                     game_id: "9".repeat(64),
                     name: "Les voyageurs de l'aube".into(),
@@ -516,6 +520,21 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
             app.screen = Screen::Games;
             app.selection.enabled = true;
             app.status = l.text("selection_empty").into();
+        }
+        46 => {
+            app.screen = Screen::Queue;
+            for job in &mut app.jobs {
+                job.done = true;
+            }
+            let job = app.jobs.last_mut().unwrap();
+            job.done = false;
+            job.started = Some(Instant::now());
+            job.state = l.text("installing").into();
+            app.focus_current_job();
+        }
+        47 => {
+            app.screen = Screen::Queue;
+            app.clear_completed_jobs();
         }
         _ => unreachable!(),
     }
@@ -566,5 +585,7 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
         "quit-confirm-stop",
         "insufficient-disk-space",
         "multi-selection-empty",
+        "queue-focus-current",
+        "queue-cleaned",
     ][frame])
 }

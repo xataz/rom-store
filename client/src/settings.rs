@@ -417,8 +417,9 @@ impl SettingsDialog {
             return false;
         }
         match action {
-            Action::Up => self.selected = self.selected.saturating_sub(1),
-            Action::Down => self.selected = (self.selected + 1).min(self.count() - 1),
+            Action::Up | Action::Down => {
+                self.selected = crate::move_grid_selection(self.selected, self.count(), action, 1)
+            }
             Action::Back if self.panel == Panel::Main => return true,
             Action::Back => {
                 self.panel = Panel::Main;
@@ -612,6 +613,21 @@ impl SettingsDialog {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn configuration_and_collection_editors_wrap() {
+        let root = tempfile::tempdir().unwrap();
+        let mut dialog =
+            SettingsDialog::new(&Config::default(), root.path().join("config.yaml")).unwrap();
+        for panel in [Panel::Main, Panel::Mapping, Panel::Command] {
+            dialog.panel = panel;
+            dialog.selected = 0;
+            dialog.action(Action::Up);
+            assert_eq!(dialog.selected, dialog.count() - 1);
+            dialog.action(Action::Down);
+            assert_eq!(dialog.selected, 0);
+        }
+    }
 
     fn select(dialog: &mut SettingsDialog, field: Field) {
         dialog.panel = Panel::Main;

@@ -397,6 +397,7 @@ Avec `--config`, le client charge et sauvegarde exactement le fichier indiqué. 
 | Retour (ne quitte jamais l'application) | Bouton secondaire, SDL B | Retour arrière |
 | Ouvrir / fermer le menu | Start | Échap |
 | Annuler la tâche sélectionnée dans les téléchargements | SDL A | Entrée |
+| Effacer les tâches terminées de la liste des téléchargements | SDL X | Espace |
 
 La lettre physique des boutons varie selon la manette. Les périphériques doivent être reconnus par SDL comme GameController. Pour une manette non reconnue, fournir un mapping via `SDL_GAMECONTROLLERCONFIG`.
 
@@ -410,7 +411,9 @@ La sauvegarde YAML utilise un fichier temporaire synchronisé puis un remplaceme
 
 Le menu donne aussi un accès direct aux **téléchargements**, à la **recherche avancée**, au **rechargement du catalogue serveur** et à **Quitter**. Si `auto_refresh: true`, il propose également une **actualisation manuelle du frontend** avec la même commande locale que le refresh automatique. Cette action est refusée tant que des installations/désinstallations sont en attente ou en cours ; elle s'exécute en arrière-plan et ses erreurs sont affichées. **B / Retour arrière ne quitte jamais l'application**, même à l'accueil. Les anciens raccourcis V/R3, I/Y, F5/L1, Tab/X et Suppr sont retirés de la navigation principale.
 
-Pendant un téléchargement, un encart en haut à gauche affiche uniquement le nom en cours et sa position **n / total** parmi les téléchargements de la session. Il ne montre ni les tâches en attente ni les désinstallations et disparaît quand aucun téléchargement n'est actif. Le détail de la file reste accessible par le menu ; **A / Entrée** y annule la tâche sélectionnée.
+Pendant un téléchargement, un encart en haut à gauche affiche uniquement le nom en cours et sa position **n / total** parmi les téléchargements encore listés. Il ne montre ni les tâches en attente ni les désinstallations et disparaît quand aucun téléchargement n'est actif. Le détail de la file reste accessible par le menu ; son ouverture sélectionne automatiquement le téléchargement actif (à défaut, l'opération active ou la première en attente). **A / Entrée** y annule la tâche sélectionnée, **B / Retour arrière** revient à l'écran précédent, et **X / Espace** efface de la liste les tâches terminées, échouées ou annulées. Ce nettoyage ne supprime aucun fichier et conserve les opérations actives/en attente ; les compteurs reflètent ensuite la liste restante.
+
+La navigation est **en boucle** dans les menus, les listes et les grilles : haut depuis le début rejoint la fin, et bas depuis la fin rejoint le début. Dans les grilles, le déplacement vertical garde la colonne lorsque possible (dernière case disponible si la dernière ligne est incomplète) ; gauche/droite bouclent aussi aux extrémités. Ce fonctionnement s'applique également à Configuration, aux éditeurs, à la recherche avancée, au sélecteur alphabétique et aux claviers à l'écran. Pour les ROMs, la boucle couvre tout le catalogue filtré, pas seulement les pages déjà chargées ; le saut vers une extrémité non chargée nécessite une requête réseau et conserve les coches de multisélection.
 
 Les listes affichent les noms sans numérotation. Les plateformes sont triées sur leur nom mappé (par exemple **Nintendo Switch**, pas `switch`). **L / R1** ouvre un sélecteur alphabétique dans les deux vues : choisir une lettre ou un chiffre avec les directions puis **Entrée / A**, ou taper directement le caractère au clavier. **Retour arrière / B** annule. Le saut sélectionne le premier nom correspondant ; pour les ROMs, il couvre tout le catalogue, même les pages non chargées, et conserve la plateforme et les filtres en cours. Si aucun nom ne correspond, la sélection reste inchangée. Le défilement reste possible dans les deux sens après un saut.
 
@@ -640,7 +643,7 @@ SDL_VIDEODRIVER=dummy client/target/debug/romstore-client \
   --smoke-test --screenshots .romstore/screenshots
 ```
 
-Le test SDL couvre 46 scènes : vues grille/liste, défilement, fiches, médias manquants, file et notification de téléchargement, erreurs et chargements, recherches, claviers textuels/numériques, désinstallation, sélecteur alphabétique, menu, sous-menu Configuration, multisélection, confirmation de fermeture et manque d'espace disque. Les captures PNG sont facultatives et écrites uniquement avec `--screenshots`. Ce test couvre l'initialisation et le rendu, pas l'ergonomie ou une manette physique. Les tests Rust couvrent aussi la persistance des réglages, les appuis courts/longs, les lots, la confirmation sans annulation prématurée et les contrôles d'espace avant tout téléchargement.
+Le test SDL couvre 48 scènes : vues grille/liste, défilement, fiches, médias manquants, file et notification de téléchargement, erreurs et chargements, recherches, claviers textuels/numériques, désinstallation, sélecteur alphabétique, menu, sous-menu Configuration, multisélection, confirmation de fermeture, manque d'espace disque, sélection du téléchargement actif et nettoyage de la liste. Les captures PNG sont facultatives et écrites uniquement avec `--screenshots`. Ce test couvre l'initialisation et le rendu, pas l'ergonomie ou une manette physique. Les tests Rust couvrent aussi la persistance des réglages, les appuis courts/longs, les lots, la confirmation sans annulation prématurée, les contrôles d'espace, la navigation en boucle et le suivi des tâches après nettoyage.
 
 ## Limites de cette version
 
