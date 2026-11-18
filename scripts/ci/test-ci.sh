@@ -191,7 +191,7 @@ test_stale_pipeline_remote_guard() {
     git init -q --bare "$remote"
     git remote add origin "$remote"
     git push -qu origin main
-    git config "url.file://$remote.insteadOf" https://gitlab.example.test/project.git
+    git config "url.file://$remote.insteadOf" https://oauth2@gitlab.example.test/project.git
     original=$(git rev-parse HEAD)
     change client/file.txt
     git push -q origin main
@@ -201,6 +201,53 @@ test_stale_pipeline_remote_guard() {
         bash scripts/ci/gitlab-release.sh client fix "$original"
     grep -q 'Pipeline obsolète' "$temporary/failure.log"
     [[ -z $(git tag --list) ]] || fail 'Un tag a été créé depuis une pipeline obsolète'
+}
+
+test_release_authentication_ignores_runner_credentials() {
+    fixture
+    helpers="$temporary/remote-helpers"
+    mkdir "$helpers"
+    export AUTH_URL_LOG="$temporary/auth-url.log" AUTH_CREDENTIALS="$temporary/auth-credentials"
+    cat > "$helpers/git-remote-https" <<'EOF'
+#!/usr/bin/env bash
+set -eu
+printf '%s\n' "$2" > "$AUTH_URL_LOG"
+printf 'url=%s\n\n' "$2" | git credential fill > "$AUTH_CREDENTIALS"
+# Arrêter avant tout échange réseau : seul le choix des credentials est testé.
+exit 1
+EOF
+    chmod +x "$helpers/git-remote-https"
+    git remote add origin https://gitlab.example.test/project.git
+    git remote set-url --push origin https://gitlab-ci-token:runner-token@gitlab.example.test/project.git
+    git config url.https://gitlab-ci-token:runner-token@gitlab.example.test/.insteadOf https://gitlab.example.test/
+    git config 'http.https://gitlab.example.test/.extraHeader' 'Authorization: Basic runner-credentials'
+    git config 'credential.https://gitlab.example.test.helper' '!echo password=runner-token'
+    expect_failure env GIT_EXEC_PATH="$helpers" CI_COMMIT_BRANCH=main CI_PIPELINE_SOURCE=parent_pipeline \
+        CI_COMMIT_REF_PROTECTED=true CI_PROJECT_URL=https://gitlab.example.test/project \
+        GITLAB_RELEASE_TOKEN=release-token bash scripts/ci/gitlab-release.sh client fix "$(git rev-parse HEAD)"
+    [[ $(cat "$AUTH_URL_LOG") == https://oauth2@gitlab.example.test/project.git ]] || fail 'URL réécrite avec le jeton du runner'
+    grep -qx 'username=oauth2' "$AUTH_CREDENTIALS"
+    grep -qx 'password=release-token' "$AUTH_CREDENTIALS"
+    [[ $(git remote get-url --push origin) == https://oauth2@gitlab.example.test/project.git ]] || fail 'Ancienne URL de push conservée'
+    [[ -z $(git config --get-urlmatch http.extraHeader https://oauth2@gitlab.example.test/project.git) ]] || fail 'En-tête HTTP du runner conservé'
+    if grep -q release-token .git/config; then fail 'Jeton de release enregistré dans la configuration Git'; fi
+}
+
+test_denied_push_fails_before_preparing_release() {
+    fixture
+    remote="$temporary/remote-denied.git"
+    git init -q --bare "$remote"
+    git remote add origin "$remote"
+    git push -qu origin main
+    git config "url.file://$remote.insteadOf" https://oauth2@gitlab.example.test/project.git
+    git config remote.origin.receivepack false
+    original=$(git rev-parse HEAD)
+    expect_failure env CI_COMMIT_BRANCH=main CI_PIPELINE_SOURCE=parent_pipeline CI_COMMIT_REF_PROTECTED=true \
+        CI_PROJECT_URL=https://gitlab.example.test/project GITLAB_RELEASE_TOKEN=dummy-token \
+        bash scripts/ci/gitlab-release.sh client fix "$original"
+    grep -q 'Accès Git en écriture refusé' "$temporary/failure.log"
+    [[ $(git rev-parse HEAD) == "$original" ]] || fail 'Commit créé malgré un refus de push'
+    [[ -z $(git tag --list) ]] || fail 'Tag créé malgré un refus de push'
 }
 
 test_make_uses_cargo_release_without_push_or_publish() {
@@ -314,7 +361,7 @@ test_real_cargo_release_and_atomic_push() {
     git init -q --bare "$remote"
     git remote add origin "$remote"
     git push -qu origin main
-    git config "url.file://$remote.insteadOf" https://gitlab.example.test/project.git
+    git config "url.file://$remote.insteadOf" https://oauth2@gitlab.example.test/project.git
     original=$(git rev-parse HEAD)
     CI_COMMIT_BRANCH=main CI_PIPELINE_SOURCE=parent_pipeline CI_COMMIT_REF_PROTECTED=true \
         CI_PROJECT_URL=https://gitlab.example.test/project GITLAB_RELEASE_TOKEN=dummy-token \
@@ -356,7 +403,9 @@ count=0
 for script in "$SOURCE_ROOT"/scripts/ci/*.sh; do bash -n "$script"; done
 for test in test_first_release test_no_changes test_component_only test_cumulative_changes \
     test_shared_changes_and_independent_tags test_rename_and_deletion test_invalid_and_unreachable_tags \
-    test_shallow_history test_release_guards test_stale_pipeline_remote_guard test_make_uses_cargo_release_without_push_or_publish \
+    test_shallow_history test_release_guards test_stale_pipeline_remote_guard \
+    test_release_authentication_ignores_runner_credentials test_denied_push_fails_before_preparing_release \
+    test_make_uses_cargo_release_without_push_or_publish \
     test_signing_key_and_hooks test_packaging test_uploads_and_failures; do
     ("$test")
     echo "OK : $test"

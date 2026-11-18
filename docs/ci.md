@@ -18,10 +18,13 @@ sans compilation croisée.
    automatique ; aucun contournement de protection n'est implémenté.
 4. Créer un **jeton d'accès de projet** avec `write_repository`, ou à défaut
    un jeton personnel d'un compte technique avec le même droit. Son rôle doit
-   permettre les opérations sur les références protégées.
+   permettre les opérations sur les références protégées : choisir **Maintainer**
+   si seuls les Maintainers peuvent pousser sur `main`. Les scopes du jeton ne
+   donnent pas plus de droits que son compte ; un rôle Guest ne suffit pas.
 5. Dans **Settings → CI/CD → Variables**, enregistrer ce jeton sous
    **`GITLAB_RELEASE_TOKEN`**, avec les options **Masked** et **Protected**,
-   et une portée d'environnement `*`. Prévoir son renouvellement avant expiration.
+   et une portée d'environnement `*`. Utiliser le type **Variable**, pas **File**,
+   et renseigner uniquement la valeur du jeton. Prévoir son renouvellement avant expiration.
 6. Activer le **Package Registry** du projet et conserver les paquets génériques
    `romstore-client` et `romstore-server` : les releases pointent sur ces fichiers,
    et non sur les artifacts temporaires des jobs.
@@ -31,6 +34,23 @@ authentifié avec `CI_JOB_TOKEN`, son push déclenche bien les pipelines de bran
 et de tag. La publication utilise le **`CI_JOB_TOKEN` temporaire** de la pipeline
 de tag pour le registre générique et l'API Releases ; aucun droit `api` n'est
 nécessaire sur le jeton de push.
+
+Le script fixe explicitement l'utilisateur `oauth2` dans les URL de lecture et
+de push, fournit le jeton uniquement via `GIT_ASKPASS` et neutralise les helpers
+de credentials et en-têtes HTTP hérités pour cette URL. Cela évite notamment
+qu'une réécriture d'URL du runner remplace le jeton de release par `CI_JOB_TOKEN`.
+Le secret n'est jamais enregistré dans l'URL ou la configuration Git.
+
+Un push en **dry-run** vérifie l'accès au service Git en écriture avant les
+compilations et la création du commit de version. Ce contrôle ne remplace pas
+les règles des branches/tags protégés ni les hooks serveur, vérifiés lors du
+push réel. Si le refus 403 persiste, vérifier le jeton, son rôle et ces règles,
+sans afficher de configuration Git brute susceptible de contenir des secrets.
+
+Un changement de rôle du même jeton peut être testé en relançant le job. En
+revanche, une modification de ce script nécessite de pousser le correctif puis
+d'utiliser **la nouvelle pipeline de `main`** : relancer un ancien job exécute
+toujours les sources de son ancien commit.
 
 L'image de compilation est Debian 12 Bookworm, avec Node 22, **Rust 1.90.0**,
 Clippy et rustfmt. SDL2 et les polices sont installées uniquement pour le client

@@ -17,18 +17,28 @@ temporary=$(mktemp -d)
 trap 'rm -f -- "$temporary/askpass.sh"; rmdir -- "$temporary"' EXIT
 cat > "$temporary/askpass.sh" <<'EOF'
 #!/usr/bin/env bash
-case "$1" in
-    *sername*) printf '%s\n' oauth2 ;;
-    *) printf '%s\n' "$GITLAB_RELEASE_TOKEN" ;;
-esac
+# Le nom d'utilisateur est explicite dans l'URL : seul le mot de passe est demandé.
+printf '%s\n' "$GITLAB_RELEASE_TOKEN"
 EOF
 chmod 700 "$temporary/askpass.sh"
 export GIT_ASKPASS="$temporary/askpass.sh" GIT_TERMINAL_PROMPT=0
-git remote set-url origin "${CI_PROJECT_URL%/}.git"
+# Le runner peut réécrire https://host/... vers une URL contenant CI_JOB_TOKEN.
+# L'utilisateur explicite évite cette réécriture, sans mettre de secret dans l'URL.
+release_url="https://oauth2@${CI_PROJECT_URL#https://}"
+release_url="${release_url%/}.git"
+git remote set-url origin "$release_url"
+git remote set-url --push origin "$release_url"
 git config --local credential.helper ''
+git config --local "credential.$release_url.helper" ''
+git config --local "http.$release_url.extraHeader" ''
 assert_current "$expected"
 git fetch origin --tags
 if ! component_pending "$component"; then die 'Aucun changement à publier pour ce composant'; fi
+# Tester l'accès au service de push avant les compilations et le commit de version.
+# Un dry-run ne vérifie toutefois pas les hooks serveur des branches/tags protégés.
+if ! git push --dry-run origin HEAD:refs/heads/main; then
+    die 'Accès Git en écriture refusé avec GITLAB_RELEASE_TOKEN ; vérifier sa valeur, son rôle et les protections du dépôt'
+fi
 git switch -c "release-${component}-${temporary##*/}" "$expected"
 git config user.name 'ROM Store Release'
 git config user.email 'romstore-release@users.noreply.gitlab.com'
