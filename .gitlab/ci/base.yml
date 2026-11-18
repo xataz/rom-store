@@ -14,7 +14,7 @@
   variables:
     GIT_DEPTH: '0'
     CARGO_HOME: $CI_PROJECT_DIR/.cargo
-    RUSTUP_HOME: /root/.rustup
+    RUSTUP_HOME: /usr/local/rustup
     CARGO_TERM_COLOR: always
     RUST_BACKTRACE: '1'
   cache:
@@ -26,3 +26,23 @@
     paths:
       - .cargo/registry/
       - .cargo/git/
+  before_script:
+    - |
+      set -eu
+      # Rust est déjà installé dans l'image ; seuls les téléchargements Cargo
+      # utilisent CARGO_HOME dans le projet pour bénéficier du cache GitLab.
+      export PATH="$CARGO_HOME/bin:$PATH"
+      cargo --version
+      rustc --version
+      CI_COMPONENT=all
+      case "${CI_COMMIT_TAG:-}" in
+        client-v*) CI_COMPONENT=client ;;
+        server-v*) CI_COMPONENT=server ;;
+      esac
+      case "$CI_JOB_NAME" in
+        client:fix|client:minor|client:major) CI_COMPONENT=client ;;
+        server:fix|server:minor|server:major) CI_COMPONENT=server ;;
+      esac
+      CI_CRATES="$CI_COMPONENT"
+      if [ "$CI_COMPONENT" = all ]; then CI_CRATES='client server'; fi
+      export CI_COMPONENT CI_CRATES
