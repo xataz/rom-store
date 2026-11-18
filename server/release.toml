@@ -1,8 +1,0 @@
-publish = false
-push = false
-shared-version = false
-consolidate-commits = false
-tag-name = "server-v{{version}}"
-tag-message = "ROM Store Server {{version}}"
-pre-release-commit-message = "chore(server): prépare la version {{version}}"
-pre-release-hook = ["bash", "../scripts/ci/check-release.sh", "server"]
