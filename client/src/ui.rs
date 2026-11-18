@@ -114,7 +114,7 @@ struct CachedText<'a> {
 
 pub fn dim(canvas: &mut Canvas<Window>, alpha: u8) -> Result<()> {
     let previous = canvas.blend_mode();
-    canvas.set_blend_mode(BlendMode::Blend);
+    canvas.set_blend_mode(BlendMode::BLEND);
     canvas.set_draw_color(Color::RGBA(4, 10, 20, alpha));
     let result = canvas.fill_rect(None).map_err(|e| anyhow!(e));
     canvas.set_blend_mode(previous);
@@ -296,7 +296,7 @@ impl<'a> Painter<'a> {
             art.height(),
         )?;
         texture.update(None, art.as_raw(), art.width() as usize * 4)?;
-        texture.set_blend_mode(BlendMode::Blend);
+        texture.set_blend_mode(BlendMode::BLEND);
         Ok(texture)
     }
 
@@ -457,7 +457,7 @@ impl<'a> Painter<'a> {
                 bitmap.height,
             )?;
             texture.update(None, &bitmap.pixels, bitmap.width as usize * 4)?;
-            texture.set_blend_mode(BlendMode::Blend);
+            texture.set_blend_mode(BlendMode::BLEND);
             texture.set_scale_mode(ScaleMode::Linear);
             self.texts.insert(
                 key.clone(),
@@ -538,7 +538,7 @@ impl<'a> Painter<'a> {
                 art.height(),
             )?;
             texture.update(None, art.as_raw(), art.width() as usize * 4)?;
-            texture.set_blend_mode(BlendMode::Blend);
+            texture.set_blend_mode(BlendMode::BLEND);
             Some(texture)
         } else {
             None
@@ -557,7 +557,7 @@ impl<'a> Painter<'a> {
             art.height(),
         )?;
         texture.update(None, art.as_raw(), art.width() as usize * 4)?;
-        texture.set_blend_mode(BlendMode::Blend);
+        texture.set_blend_mode(BlendMode::BLEND);
         self.preview = Some((id, texture));
         Ok(())
     }
@@ -591,7 +591,7 @@ impl<'a> Painter<'a> {
             art.height(),
         )?;
         texture.update(None, art.as_raw(), art.width() as usize * 4)?;
-        texture.set_blend_mode(BlendMode::Blend);
+        texture.set_blend_mode(BlendMode::BLEND);
         self.thumbnails.insert(id, texture);
         Ok(())
     }
