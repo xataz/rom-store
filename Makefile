@@ -3,10 +3,12 @@
 CARGO ?= cargo
 PROFILE ?= release
 PYTHON ?= python3
+CARGO_RELEASE_VERSION ?= 1.0.0
+GIT_CLIFF_VERSION ?= 2.10.1
 
 .PHONY: all build client server test test-client test-server test-unit \
 	test-unit-client test-unit-server fixtures run-server run-client help \
-	release-client release-server
+	release-client release-server release-tools test-ci
 
 all: build
 
@@ -35,10 +37,17 @@ test-unit-server:
 	$(CARGO) test --locked --manifest-path server/Cargo.toml --lib --bins
 
 release-client:
-	$(PYTHON) scripts/ci/prepare_release.py client "$(TYPE)" --cargo "$(CARGO)"
+	CARGO="$(CARGO)" bash scripts/ci/prepare-release.sh client "$(TYPE)"
 
 release-server:
-	$(PYTHON) scripts/ci/prepare_release.py server "$(TYPE)" --cargo "$(CARGO)"
+	CARGO="$(CARGO)" bash scripts/ci/prepare-release.sh server "$(TYPE)"
+
+release-tools:
+	$(CARGO) install cargo-release --version $(CARGO_RELEASE_VERSION) --locked --no-default-features --features vendored-libgit2
+	$(CARGO) install git-cliff --version $(GIT_CLIFF_VERSION) --locked --no-default-features
+
+test-ci:
+	bash scripts/ci/test-ci.sh
 
 fixtures:
 	$(PYTHON) test/generate.py
@@ -63,5 +72,7 @@ help:
 	@echo 'make run-server    Servir la bibliothèque synthétique sur 127.0.0.1:8000'
 	@echo 'make run-client    Ouvrir le client avec la configuration de démonstration'
 	@echo 'make fixtures      Régénérer les données synthétiques (Python 3 requis)'
+	@echo 'make release-tools Installer cargo-release et git-cliff (versions épinglées)'
+	@echo 'make test-ci       Tester les scripts Bash de CI/release'
 	@echo 'make release-client TYPE=fix|minor|major  Préparer le commit et le tag client, sans push'
 	@echo 'make release-server TYPE=fix|minor|major  Préparer le commit et le tag serveur, sans push'

@@ -43,9 +43,6 @@ Sur un hôte d'architecture différente, Docker/Podman doit déjà être configu
 l'émulation multiarchitecture (QEMU/binfmt). Le script n'installe rien sur l'hôte.
 Options supplémentaires : `--engine docker|podman` et `--output /chemin/de/sortie`.
 
-Sur GitHub, le workflow manuel **Batocera client packages** produit aussi les deux
-archives comme *artifacts*, sur des runners natifs séparés. Il ne publie pas de release.
-
 ## 2. Copier et installer
 
 Pour un Batocera PC x86_64, copier depuis le PC :

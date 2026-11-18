@@ -1,0 +1,36 @@
+[changelog]
+header = ""
+body = """
+## {{ version }}
+{% if previous.version %}
+Modifications depuis {{ previous.version }}.
+{% if get_env(name="CI_PROJECT_URL", default="") != "" %}
+[Comparer les versions]({{ get_env(name="CI_PROJECT_URL") }}/-/compare/{{ previous.version }}...{{ version }})
+{% endif %}
+{% else %}
+Première release du composant : historique complet jusqu'à cette version.
+{% endif %}
+{% for commit in commits %}
+- {{ commit.message | split(pat="\n") | first }} \
+{% if get_env(name="CI_PROJECT_URL", default="") != "" %}\
+([{{ commit.id | truncate(length=8, end="") }}]({{ get_env(name="CI_PROJECT_URL") }}/-/commit/{{ commit.id }}))\
+{% else %}\
+({{ commit.id | truncate(length=8, end="") }})\
+{% endif %}
+{% if commit.body %}
+{{ commit.body | indent(prefix="    ") }}
+{% endif %}
+{% else %}
+Aucun nouveau commit entre ces deux tags.
+{% endfor %}
+"""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = false
+filter_unconventional = false
+filter_commits = false
+split_commits = false
+topo_order = true
+sort_commits = "oldest"

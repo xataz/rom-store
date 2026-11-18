@@ -1,0 +1,48 @@
+.rust:
+  image: node:22-bookworm
+  timeout: 1h
+  # Explicite pour inclure aussi les merge requests (jobs sans rules exclus des MR).
+  rules:
+    - when: on_success
+  variables:
+    GIT_DEPTH: '0'
+    CARGO_HOME: $CI_PROJECT_DIR/.cargo
+    RUSTUP_HOME: /root/.rustup
+    CARGO_TERM_COLOR: always
+    RUST_BACKTRACE: '1'
+  cache:
+    key:
+      prefix: cargo-bookworm-x86_64-rust-1.90.0
+      files:
+        - client/Cargo.lock
+        - server/Cargo.lock
+    paths:
+      - .cargo/registry/
+      - .cargo/git/
+  before_script:
+    - |
+      set -eu
+      test "$(uname -m)" = x86_64
+      CI_COMPONENT=all
+      case "${CI_COMMIT_TAG:-}" in
+        client-v*) CI_COMPONENT=client ;;
+        server-v*) CI_COMPONENT=server ;;
+      esac
+      case "$CI_JOB_NAME" in
+        client:fix|client:minor|client:major) CI_COMPONENT=client ;;
+        server:fix|server:minor|server:major) CI_COMPONENT=server ;;
+      esac
+      CI_CRATES="$CI_COMPONENT"
+      if [ "$CI_COMPONENT" = all ]; then CI_CRATES='client server'; fi
+      export CI_COMPONENT CI_CRATES
+      apt-get update
+      apt-get install -y --no-install-recommends \
+        build-essential ca-certificates curl git jq make pkg-config libssl-dev
+      if [ "$CI_COMPONENT" != server ]; then
+        apt-get install -y --no-install-recommends libsdl2-dev fonts-dejavu-core
+      fi
+      curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+        https://sh.rustup.rs --output /tmp/rustup-init.sh
+      sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain 1.90.0 \
+        --component rustfmt --component clippy
+      export PATH="$CARGO_HOME/bin:$PATH"

@@ -1,160 +1,173 @@
-# CI/CD Codeberg / Forgejo Actions
+# CI/CD GitLab
 
-Le workflow [`.forgejo/workflows/ci.yml`](../.forgejo/workflows/ci.yml) cible
-**Linux x86_64 uniquement**. Il n'utilise ni runner ARM64 ni compilation croisée.
-Les workflows GitHub existants sont conservés ; la présence du dossier `.forgejo`
-permet à Forgejo d'utiliser ses propres workflows à la place de `.github`.
+La configuration [`.gitlab-ci.yml`](../.gitlab-ci.yml) cible **Linux x86_64**,
+sans compilation croisée.
 
-## Préparer Codeberg et le runner
+## Préparer GitLab et le runner
 
-1. Activer **Actions** dans les paramètres du dépôt si nécessaire.
-2. Vérifier que le runner x86_64 est connecté et exécute les jobs dans des
-   **conteneurs Docker** (Podman compatible est également possible).
-3. Le workflow utilise `runs-on: docker`. Remplacer `docker` par le label réel du
-   runner dans le fichier YAML si nécessaire, ou déclarer un label tel que
-   `docker:docker://node:22-bookworm` dans la configuration du runner.
-   Un label `ubuntu-latest` ne correspond pas automatiquement à `docker`.
-4. Le runner doit pouvoir télécharger l'image `node:22-bookworm`, les actions
-   depuis `code.forgejo.org`, Rust et les dépendances Debian/Cargo. Son service de
-   cache doit être configuré et accessible depuis les conteneurs pour l'action cache.
+1. Enregistrer un runner **Linux x86_64 avec exécuteur Docker** pouvant prendre
+   les jobs sans tag. Sinon, ajouter les tags du runner aux jobs concernés.
+2. Autoriser les images `node:22-bookworm`, `orhunp/git-cliff:2.10.1` et
+   `registry.gitlab.com/gitlab-org/cli:v1.76.0`, les accès aux dépôts Debian/Alpine,
+   à Rust, à Cargo et à l'API GitLab. Aucun mode privilégié ni socket Docker monté
+   n'est nécessaire. Le mot-clé `release:` nécessite un GitLab/Runner récent
+   prenant en charge `glab` (GitLab 18.0+).
+3. Protéger la branche **`main`** et les tags **`client-v*`**, **`server-v*`**.
+   Autoriser le compte de release à pousser sur `main` et à créer ces tags.
+   Les règles d'approbation du projet doivent permettre ce commit de version
+   automatique ; aucun contournement de protection n'est implémenté.
+4. Créer un **jeton d'accès de projet** avec `write_repository`, ou à défaut
+   un jeton personnel d'un compte technique avec le même droit. Son rôle doit
+   permettre les opérations sur les références protégées.
+5. Dans **Settings → CI/CD → Variables**, enregistrer ce jeton sous
+   **`GITLAB_RELEASE_TOKEN`**, avec les options **Masked** et **Protected**,
+   et une portée d'environnement `*`. Prévoir son renouvellement avant expiration.
+6. Activer le **Package Registry** du projet et conserver les paquets génériques
+   `romstore-client` et `romstore-server` : les releases pointent sur ces fichiers,
+   et non sur les artifacts temporaires des jobs.
 
-L'image de job est explicitement définie : **Debian 12 Bookworm, Node 22**, avec
-installation de **Rust 1.90.0**, Clippy, rustfmt et, pour le client, SDL2. L'installation des paquets
-s'effectue en root **dans le conteneur**, pas sur l'hôte ; aucun mode privilégié
-ni montage du socket Docker dans le job n'est nécessaire.
+La préparation utilise ce jeton uniquement pour Git. Contrairement à un push
+authentifié avec `CI_JOB_TOKEN`, son push déclenche bien les pipelines de branche
+et de tag. La publication utilise le **`CI_JOB_TOKEN` temporaire** de la pipeline
+de tag pour le registre générique et l'API Releases ; aucun droit `api` n'est
+nécessaire sur le jeton de push.
 
-Le jeton temporaire `${{ secrets.GITHUB_TOKEN }}` est fourni automatiquement par
-Forgejo et utilisé pour créer la release dans **le même dépôt**. Aucun jeton
-personnel n'est nécessaire dans la configuration habituelle. Si l'API renvoie
-403, vérifier la politique de permissions du jeton Actions de l'instance/dépôt.
-Ne jamais placer de jeton directement dans le YAML ou les scripts.
+L'image de compilation est Debian 12 Bookworm, avec Node 22, **Rust 1.90.0**,
+Clippy et rustfmt. SDL2 et les polices sont installées uniquement pour le client
+ou les vérifications communes. L'installation s'effectue en root dans le conteneur,
+pas sur l'hôte. Le cache conserve le registre et les dépôts Cargo, pas les `target`.
+Configurer le cache distribué du runner si les jobs tournent sur plusieurs machines.
 
-## Ce qui s'exécute
+La CI et les releases **ne nécessitent pas Python** :
 
-Les deux composants ont des versions et des releases indépendantes :
+| Fonction | Outil |
+|---|---|
+| Version, lock, commit et tag | `cargo-release` **1.0.0**, compatible Rust 1.90 |
+| Notes de release | `git-cliff` **2.10.1**, configuré dans `cliff.toml` |
+| Sélection des composants et garde-fous Git | Bash et Git |
+| Archive et empreinte | `tar`, `od` et `sha256sum` |
+| Lecture des métadonnées Cargo | `cargo metadata` et `jq` |
+| Envoi au registre générique | `curl` avec `CI_JOB_TOKEN` |
+| Création de la release | Mot-clé GitLab `release:` et `glab` |
 
-| Événement | Composants testés et compilés | Publication |
-|---|---|---|
-| Push de branche / pull request | Client et serveur, avec E2E | Non |
-| Push de `client-vX.Y.Z` | Client uniquement, avec tests SDL | Release client |
-| Push de `server-vX.Y.Z` | Serveur uniquement, avec tests WebUI | Release serveur |
-| Lancement manuel | Choix `all`, `client` ou `server` | Non |
+Les fichiers `client/release.toml` et `server/release.toml` désactivent la
+publication vers crates.io et le push de `cargo-release`, définissent les tags
+indépendants et appellent le hook de vérification du composant. Le push CI reste
+explicite et atomique. Ne pas remplacer les versions épinglées sans vérifier
+leur version Rust minimale ; les dernières versions de `cargo-release` peuvent
+nécessiter une version de Rust plus récente que celle du projet.
 
-Les anciens tags communs `vX.Y.Z` ne publient plus de release. Les autres tags
-exécutent les vérifications des deux composants, sans publication.
+## Pipeline de branche / merge request
 
-Pour les composants sélectionnés :
-
-- vérification de l'architecture x86_64 ;
-- formatage Rust et Clippy, avec avertissements traités comme erreurs ;
-- tests des outils de release, et du JavaScript si le serveur est sélectionné ;
-- tests unitaires et d'intégration Rust (`make test-client`, `make test-server` ou `make test`) ;
-- compilation en release (`make client`, `make server` ou `make all`) ;
-- tests E2E ignorés par défaut, avec le véritable client de release, **si les deux
-  composants sont sélectionnés** ;
-- test de rendu SDL sans écran et test de densité du texte si le client est sélectionné.
-
-Une release serveur ne nécessite donc ni compilation du client ni SDL2. Une release
-client ne nécessite pas de compiler le serveur. Les tests de compatibilité E2E sont
-conservés sur les branches/PR et les lancements manuels `all`, mais ne bloquent pas
-une release indépendante sur la compilation de l'autre composant.
-
-Les étapes s'arrêtent au premier échec. Les dépendances téléchargées par Cargo
-sont mises en cache ; les répertoires `target` ne le sont pas. Aucun ancien outil
-de packaging Batocera absent du dépôt n'est appelé.
-
-Sur un **push de tag `client-v…` ou `server-v…`**, après ces vérifications :
-
-1. Vérification du tag : il doit correspondre à la version du **seul composant ciblé**.
-2. Vérification du binaire ELF64 x86_64, puis création de son archive.
-3. Génération des notes depuis l'historique Git et création d'un fichier `CHANGELOG.md`.
-4. Création d'une release en **brouillon**, avec les notes dans sa description,
-   et téléversement de l'archive, de `SHA256SUMS` et de `CHANGELOG.md`.
-5. Publication uniquement une fois tous les fichiers envoyés. Un tag avec suffixe
-   comme `client-v0.2.0-rc.1` produit une prérelease.
-
-Un lancement manuel, même sur un tag, ne publie pas de release. Une pull request
-ne déclenche jamais les étapes de publication ; le checkout ne conserve pas ses
-identifiants Git. Utiliser uniquement des runners isolés pour du code non fiable,
-et ne pas approuver aveuglément les workflows provenant de forks.
-
-## Publier une version
-
-### Préparation automatique (recommandée)
-
-Depuis un dépôt propre, lancer la commande du composant concerné :
-
-```bash
-make release-client TYPE=fix
-# Ou, indépendamment :
-make release-server TYPE=minor
+```text
+check → test → build → release (main uniquement)
 ```
 
-Ces commandes nécessitent Python **3.11+**, Git avec une identité de commit configurée,
-et l'environnement Rust habituel du composant (dont SDL2 pour le client).
-Le type est obligatoire ; la version est calculée depuis le `Cargo.toml` du
-composant sélectionné, sans modifier l'autre composant :
+- **check** : formatage Rust, Clippy avec avertissements interdits et `make test-ci`
+  pour les scripts Bash de CI/release ;
+- **test** : tests JavaScript de l'interface d'administration et tests unitaires
+  et d'intégration Rust des deux composants ;
+- **build** : compilation release, tests E2E avec le véritable client, test SDL
+  sans écran et test de densité du texte ;
+- **release** : ouvre la pipeline enfant contenant les boutons de release.
 
-| Type | Effet | Exemple depuis `1.2.3` |
-|---|---|---|
-| `fix` | Incrémente le correctif | `1.2.4` |
-| `minor` | Incrémente la mineure et remet le correctif à zéro | `1.3.0` |
-| `major` | Incrémente la majeure et remet mineure et correctif à zéro | `2.0.0` |
+Une branche ayant une merge request ouverte utilise la pipeline de MR plutôt que
+de lancer deux pipelines à chaque push. Les pipelines de MR n'ont jamais de jobs
+de préparation ou de publication de release.
 
-Cette commande remplace l'ancien argument `VERSION=…`. Elle exige une version
-actuelle stable `X.Y.Z` ; pour une prérelease (`-rc.1`, par exemple), utiliser
-la préparation manuelle ci-dessous.
-`CARGO` et `PYTHON` peuvent être surchargés comme pour les autres cibles Make.
+## Releases manuelles depuis `main`
 
-Le script `scripts/ci/prepare_release.py` :
+Après réussite des vérifications, ouvrir le job de déclenchement **release**, puis
+sa **pipeline enfant** dans le graphe GitLab. Les jobs manuels sont dans son stage
+`release` : GitLab ne permet pas d'injecter des jobs dynamiques dans le parent.
 
-1. Refuse les changements non committés, y compris les fichiers non suivis,
-   un HEAD détaché, un type invalide ou une version actuelle non stable,
-   et un tag déjà présent **localement**.
-2. Affiche la version actuelle et la version calculée, modifie uniquement
-   `package.version` du composant et actualise son `Cargo.lock`
-   avec `cargo metadata`, en conservant les versions verrouillées des dépendances.
-3. Vérifie le formatage, Clippy (`--all-targets`, avertissements interdits)
-   et les tests Rust non ignorés du composant. Clippy et les tests gardent `--locked`.
-4. Crée le commit contenant le manifeste et le lock, puis le tag annoté correspondant.
-   Si `user.signingkey` est renseigné dans la configuration Git effective (locale
-   ou globale), signe **le commit et le tag** avec cette clé, même si
-   `commit.gpgsign` ou `tag.gpgsign` vaut `false`. Git conserve ses réglages de
-   signature (`gpg.format`, programme GPG, agent et demande de phrase secrète).
-   Sans clé explicite, le comportement habituel de Git est conservé.
-5. Affiche les deux commandes de push à exécuter après vérification.
+| Changements restant à publier | Boutons proposés |
+|---|---|
+| Client uniquement | `client:fix`, `client:minor`, `client:major` |
+| Serveur uniquement | `server:fix`, `server:minor`, `server:major` |
+| Les deux composants / fichiers partagés | Les six jobs |
+| Aucun changement | Un job informatif, sans bouton de release |
 
-**Aucun push n'est automatique.** Vérifier notamment `git show HEAD` et le tag,
-puis utiliser les commandes affichées pour pousser la branche et le tag sur `origin`.
-Les vérifications complètes de la CI et la publication restent déclenchées par le push.
-Mettre à jour ses références Git avant de commencer pour éviter de réutiliser un tag
-existant seulement sur le dépôt distant.
+Les changements sont comparés **au dernier tag accessible du composant**, pas au
+dernier push : une modification client reste donc à publier même si les derniers
+commits ne touchent que le serveur. Sans tag, le composant est proposé pour sa
+première release. Les tags invalides ou non ancêtres de `main` sont ignorés.
+La comparaison porte sur la différence nette des fichiers ; une modification
+entièrement annulée depuis le tag ne nécessite pas de release.
 
-En cas d'échec des contrôles, aucun commit ni tag n'est créé. Les modifications
-restent disponibles, sans annulation automatique : vérifier `git status`, corriger
-le problème et terminer manuellement, ou revenir explicitement à un état propre
-avant de relancer. Si Git échoue lors du commit ou du tag (par exemple à cause
-d'un hook ou d'une signature), inspecter aussi `git log` et `git tag --list` :
-un commit peut déjà avoir été créé. Le script ne supprime ni commit ni tag.
-Une signature en échec bloque la préparation, sans tentative de repli non signée.
+Les chemins sous `client/` concernent le client ; ceux sous `server/` concernent
+le serveur. **Tout autre chemin est partagé**, y compris documentation, scripts,
+tests communs, Makefile et CI. Chaque composant utilise son propre point de
+comparaison : si le client a déjà publié un changement partagé, seul le serveur
+reste proposé pour ce changement.
 
-### Préparation manuelle
+Les versions sont indépendantes et lues depuis leurs `Cargo.toml` respectifs :
 
-Mettre à jour `package.version` dans le `Cargo.toml` du composant concerné,
-puis actualiser et committer **son** `Cargo.lock` avec le manifeste. La version
-de l'autre composant reste inchangée. Par exemple, un client `0.2.0` peut coexister
-avec un serveur `0.1.3` ; leur compatibilité dépend du contrat de l'API, pas de
-l'égalité de leurs versions. L'interface du client affiche automatiquement sa
-version de compilation, issue de `client/Cargo.toml`, dans un petit encadré d'en-tête.
-Le tag doit pointer sur le commit contenant également le workflow et les scripts.
-Exemple pour publier uniquement le client `0.1.0` :
+| Type | Depuis `1.2.3` |
+|---|---|
+| `fix` | `1.2.4` |
+| `minor` | `1.3.0` |
+| `major` | `2.0.0` |
 
-```bash
-git tag -a client-v0.1.0 -m 'ROM Store Client 0.1.0'
-git push origin client-v0.1.0
+Après confirmation, le job :
+
+1. Exige une pipeline enfant de la branche `main` protégée, le commit exact de la
+   pipeline parente et un `main` distant n'ayant pas avancé.
+2. Récupère les tags et vérifie que le composant a encore des changements à publier.
+3. Appelle la cible Make du composant, qui délègue à `cargo-release` l'incrément
+   de `package.version` et la mise à jour de `Cargo.lock`, sans mise à jour
+   volontaire des dépendances. Son hook relance formatage, Clippy et tests Rust.
+4. Crée un commit et un tag annoté `client-vX.Y.Z` ou `server-vX.Y.Z`.
+5. Revérifie `main`, puis pousse le commit et le tag **atomiquement**, sans force.
+   Si `main` avance entre-temps, le push est rejeté sans publier le tag.
+
+Les préparations client et serveur partagent un verrou `resource_group` pour
+éviter les courses. Après une première release, **utiliser la nouvelle pipeline
+de `main`** pour publier l'autre composant : les boutons de l'ancienne pipeline
+restent visibles mais refusent de publier depuis un commit obsolète. La liste
+des boutons est un instantané au moment de la génération, pas une vue actualisée.
+
+Les jobs manuels sont optionnels et ne bloquent pas le statut vert du parent.
+Un échec de préparation doit être consulté dans le job enfant : il ne rend pas
+la pipeline parente rouge. Ne pas lancer plusieurs types de release pour le
+même composant : choisir un seul incrément. Aucun push n'est effectué si les
+contrôles échouent. Un échec du push laisse seulement les changements locaux
+dans l'environnement éphémère du job, sans annulation ni force-push.
+
+## Pipeline de tag : publication automatique
+
+```text
+check → test → build → publish
 ```
 
-Après réussite, la release Codeberg contient :
+Un tag `client-vX.Y.Z` vérifie, teste et compile **le client uniquement**, avec
+les tests SDL. Un tag `server-vX.Y.Z` fait de même **pour le serveur uniquement**,
+avec les tests WebUI. Les E2E communs ont déjà été exécutés sur `main`.
+Les autres tags, dont les anciens tags communs `vX.Y.Z`, ne créent pas de pipeline.
+
+Le tag doit correspondre exactement à la version du manifeste ciblé. Après
+validation du binaire ELF64 x86_64, la publication :
+
+1. Prépare l'archive et `SHA256SUMS`.
+2. Génère `CHANGELOG.md` avec `git-cliff`, dans le job parallèle `notes`, depuis
+   les commits entre ce tag et le précédent tag du même composant, avec liens
+   de comparaison et de commits GitLab.
+3. Envoie les trois fichiers au registre de paquets génériques GitLab.
+4. Le mot-clé GitLab `release:` crée la release et ses liens de téléchargement
+   **uniquement après la réussite de tous les envois**. Une release existante
+   n'est jamais modifiée.
+
+Un tag suffixé `-rc.1` reste identifiable par son nom mais crée une release
+GitLab ordinaire.
+Les préreleases se préparent manuellement : les boutons d'incrément exigent une
+version actuelle stable `X.Y.Z`.
+
+L'historique complet est requis (`GIT_DEPTH: '0'`). Pour la première release,
+les notes présentent tout l'historique du composant jusqu'au tag. Les messages
+ne sont pas filtrés par répertoire afin d'inclure les changements partagés.
+`SHA256SUMS` vérifie l'archive ; le changelog est un fichier joint séparé.
+
+Exemple de fichiers d'une release client :
 
 ```text
 romstore-client-0.1.0-linux-x86_64.tar.gz
@@ -162,65 +175,72 @@ SHA256SUMS
 CHANGELOG.md
 ```
 
-Pour le serveur, utiliser par exemple `server-v0.1.3`, avec `package.version = "0.1.3"`
-dans `server/Cargo.toml`. Sa release contiendra uniquement
-`romstore-server-0.1.3-linux-x86_64.tar.gz`, son propre `SHA256SUMS` et `CHANGELOG.md`.
-Les archives locales sont isolées dans `dist/client-v…/` et `dist/server-v…/`.
+Les fichiers locaux sont isolés dans `dist/<tag>/`. Les artifacts de build
+expirent après sept jours ; les fichiers du Package Registry restent disponibles
+tant qu'aucune règle de nettoyage ne les supprime.
 
-### Notes de release automatiques
+En cas d'échec de publication, **réparer et relancer la pipeline de ce tag** avant
+de préparer une nouvelle version : la détection utilise les tags, même si leur
+publication a échoué. Si des fichiers ont été envoyés partiellement, supprimer
+le paquet générique incomplet avant de relancer. Ne jamais supprimer une release
+publiée ou remplacer silencieusement ses fichiers pour corriger ses binaires ;
+préparer une nouvelle version. Les publications d'un même tag sont sérialisées.
 
-La description de la release et son fichier joint **`CHANGELOG.md`** présentent :
+## Préparer une release localement
 
-- le précédent tag du **même composant**, parmi les ancêtres du tag publié
-  (`client-v…` pour le client, `server-v…` pour le serveur, y compris les préreleases) ;
-- un lien Codeberg pour comparer les deux versions ;
-- tous les commits de cet intervalle, du plus ancien au plus récent, avec leur
-  titre, le détail du message lorsqu'il existe et un lien vers chaque commit.
+Depuis un dépôt propre, avec Bash, Git configuré, `jq` et l'environnement Rust
+du composant, installer une fois les outils épinglés :
 
-Le générateur compare les tags, pas la date de création des releases dans l'interface
-Codeberg. Les tags d'une branche non fusionnée et les tags de l'autre composant ne
-servent pas de référence. Les commits ne sont pas filtrés par répertoire : les
-changements partagés, de documentation et de CI restent visibles. Les commits faits
-après le tag publié ne sont jamais inclus. Les titres sont échappés et les détails
-sont présentés comme du texte pour ne pas interpréter le Markdown/HTML des messages.
+```bash
+# Debian/Ubuntu : prérequis de compilation de cargo-release
+sudo apt-get install build-essential pkg-config libssl-dev jq
+make release-tools
+```
 
-Pour la première release d'un composant, l'historique complet jusqu'au tag est
-présenté, avec une mention explicite. Si deux tags pointent sur le même commit,
-les notes indiquent qu'il n'y a pas de nouveau commit.
+`cargo-release` est une **extension**, pas une commande fournie avec Cargo.
+La cible installe aussi `git-cliff`, utile pour générer les notes localement.
+`CARGO_RELEASE_VERSION` et `GIT_CLIFF_VERSION` permettent de surcharger les versions
+d'installation ; la CI utilise les versions épinglées dans sa configuration.
 
-Le checkout CI utilise **`fetch-depth: 0`** pour récupérer l'historique et les tags.
-Un dépôt superficiel ou un tag inaccessible bloque la publication au lieu de créer
-des notes incomplètes. Le changelog est calculé localement, sans service externe ;
-il est écrit dans `dist/<tag>/CHANGELOG.md` par l'étape de publication, et non dans
-l'archive binaire. `SHA256SUMS` continue de vérifier cette archive uniquement.
+Les commandes de préparation restent identiques :
 
-Comme les autres fichiers, le changelog doit être envoyé avec succès avant de
-publier le brouillon. Une release déjà existante n'est pas modifiée.
+```bash
+make release-client TYPE=fix
+make release-server TYPE=minor
+```
 
-Chaque archive contient un dossier versionné avec le binaire et la documentation ;
-celle du client inclut aussi `config.example.yaml`. Aucune configuration privée,
-ROM, base SQLite ni donnée de cache n'est incluse.
+`fix` est traduit en `patch`, le nom du niveau correctif dans `cargo-release`.
+`CARGO` peut être surchargé, par exemple `make release-client TYPE=fix CARGO='cargo +stable'`.
 
-Une release existante n'est **jamais écrasée**. Si un envoi échoue, elle reste en
-brouillon : supprimer manuellement ce brouillon incomplet sur Codeberg, sans
-supprimer le tag, puis relancer le job. Ne pas supprimer une release déjà publiée
-pour remplacer silencieusement ses binaires ; utiliser un nouveau numéro de version.
+Elles refusent un dépôt sale, un HEAD détaché et une version actuelle non stable,
+préparent uniquement le composant choisi, exécutent les contrôles et créent
+le commit et le tag **sans push ni publication vers crates.io**.
+Si `user.signingkey` est configuré, le commit
+et le tag sont signés ; un échec de signature n'entraîne aucun repli non signé.
+Vérifier le résultat puis pousser la branche et le tag ensemble :
+
+```bash
+git push --atomic origin HEAD:main refs/tags/client-v0.1.1
+```
+
+Adapter le tag. Pour une prérelease, modifier et committer manuellement la version
+et le lock, puis créer le tag correspondant. Un tag poussé manuellement déclenche
+les mêmes vérifications et la même publication que depuis les boutons GitLab.
+Les protections GitLab restent applicables aux opérations locales.
+En cas d'échec, inspecter `git status`, `git log` et les tags avant de relancer :
+aucune annulation automatique de modifications, de commit ou de tag n'est effectuée.
 
 ## Utiliser les archives
 
-Télécharger l'archive et le `SHA256SUMS` de **la même release** dans un dossier :
+Télécharger l'archive et `SHA256SUMS` de **la même release** :
 
 ```bash
 sha256sum -c SHA256SUMS
 tar -xzf romstore-client-0.1.0-linux-x86_64.tar.gz
 ```
 
-Procéder de même pour une release serveur, de préférence dans un dossier distinct
-pour ne pas confondre les deux fichiers `SHA256SUMS`.
-
-Ce sont des binaires **dynamiques**, compilés sur Debian 12 : cible de base
-**glibc 2.36+**, avec les bibliothèques d'exécution système habituelles.
-Pour le client, installer **SDL2 2.26+** et une police TrueType, par exemple sur Debian :
+Ce sont des binaires **dynamiques Debian 12**, nécessitant **glibc 2.36+**.
+Le client requiert aussi **SDL2 2.26+** et une police TrueType :
 
 ```bash
 sudo apt-get install libsdl2-2.0-0 fonts-dejavu-core
@@ -228,25 +248,32 @@ sudo apt-get install libsdl2-2.0-0 fonts-dejavu-core
 
 Copier `config.example.yaml` vers un fichier personnel et adapter ses chemins
 avant de lancer `romstore-client --config /chemin/config.yaml`. Le serveur utilise
-les options décrites dans `docs/server.md`. Le serveur n'a pas besoin de SDL2.
+les options de `docs/server.md` et ne nécessite pas SDL2.
+L'archive contient le binaire et sa documentation, jamais de configuration privée,
+ROM, base SQLite ni cache. Ce ne sont **pas des installateurs Batocera** : aucune
+entrée Ports ni configuration n'est créée automatiquement. Vérifier séparément
+la compatibilité de la version de Batocera (glibc/SDL2 et matériel).
 
-Ces archives ne sont **pas des installateurs Batocera** : elles ne créent ni entrée
-Ports ni configuration automatiquement. La compatibilité avec une version donnée
-de Batocera doit être vérifiée séparément (glibc/SDL2 et matériel).
-
-## Vérification locale des outils de release
-
-Python **3.11+** est requis uniquement pour ces outils CI, pas pour les binaires :
+## Vérification locale des outils CI
 
 ```bash
-python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
+make test-ci
+bash scripts/ci/generate-releases.sh dist/release-jobs.yml
 make client
-python3 scripts/ci/package.py client-v0.1.0
-# Ou, indépendamment :
-make server
-python3 scripts/ci/package.py server-v0.1.0
+bash scripts/ci/package.sh client-v0.1.0
+bash scripts/ci/changelog.sh client-v0.1.0
 ```
 
-Ces commandes écrivent dans `dist/client-v0.1.0/` ou `dist/server-v0.1.0/`, ignorés
-par Git, sans contacter Codeberg. Adapter le tag à la version du manifeste concerné.
-Le script de publication n'est appelé que par l'étape dédiée du workflow.
+Adapter le tag à la version du manifeste, ou utiliser `make server` puis
+`package.sh server-vX.Y.Z`. Pour `changelog.sh`, le tag doit exister localement ;
+définir `CI_PROJECT_URL` pour inclure les liens GitLab dans les notes locales.
+Ces commandes n'effectuent aucun accès à l'API GitLab.
+
+`make test-ci` travaille dans des dépôts temporaires : détection des composants,
+tags indépendants, hooks, options Make, packaging, sommes de contrôle et erreurs
+d'envoi simulées. Si les outils sont installés avec `make release-tools`, il teste
+aussi le vrai `git-cliff` et une release avec le vrai `cargo-release`, jusqu'au
+push atomique **vers un dépôt Git local isolé**, jamais vers le dépôt du projet.
+
+La variable Make `PYTHON` ne sert plus qu'à `make fixtures` (`test/generate.py`),
+qui reste un générateur de données de test indépendant de la CI/release.

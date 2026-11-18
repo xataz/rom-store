@@ -596,11 +596,13 @@ La commande publie le nouvel index en une transaction SQLite et affiche les anom
 
 ## Tests et qualité
 
-Le pipeline **Codeberg / Forgejo Actions** teste et compile les deux applications
+Le pipeline **GitLab CI/CD** teste et compile les deux applications
 sur Linux x86_64. Les tags `client-vX.Y.Z` et `server-vX.Y.Z` compilent, testent et
 publient indépendamment le composant concerné avec son archive et sa somme SHA-256.
-Les versions des deux applications peuvent différer ; un lancement manuel permet
-aussi de choisir le client, le serveur ou les deux. Le client affiche sa version
+Les versions des deux applications peuvent différer. Sur `main`, une pipeline enfant
+propose les jobs manuels `fix`, `minor` et `major` pour chaque composant modifié
+depuis son dernier tag (trois à six jobs), afin de préparer et pousser la release
+directement depuis GitLab. Le client affiche sa version
 dans un petit encadré de l'en-tête, automatiquement issu de son `Cargo.toml`.
 Voir [la configuration du runner et la procédure de release](docs/ci.md).
 
@@ -626,9 +628,12 @@ Ces tests créent leurs propres bibliothèques synthétiques, sans dépendre de
 l'ancien serveur vérifie la compatibilité des identifiants et révisions ; un cas à
 10 050 entrées vérifie pagination et cache à chaud.
 
-Seuls les outils de packaging/installation Batocera restent en Python, séparément des
-deux applications. Leurs tests optionnels : `python3 -m pytest tests`, après installation
-de `pytest` ; leur qualité peut être vérifiée avec `ruff check packaging/batocera tests`.
+La CI et les releases n'utilisent pas Python : `cargo-release` prépare les versions,
+`git-cliff` génère les notes et GitLab publie les archives. `make release-tools`
+installe les outils épinglés ; `make release-client TYPE=fix|minor|major` et
+`make release-server TYPE=fix|minor|major` préparent le commit et le tag sans push.
+`make test-ci` teste les scripts Bash associés. Python reste nécessaire uniquement
+pour régénérer les données synthétiques avec `make fixtures`.
 
 Test de démarrage et de rendu SDL sans écran :
 

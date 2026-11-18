@@ -1,0 +1,8 @@
+publish = false
+push = false
+shared-version = false
+consolidate-commits = false
+tag-name = "client-v{{version}}"
+tag-message = "ROM Store Client {{version}}"
+pre-release-commit-message = "chore(client): prépare la version {{version}}"
+pre-release-hook = ["bash", "../scripts/ci/check-release.sh", "client"]
