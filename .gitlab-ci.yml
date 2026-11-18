@@ -14,7 +14,7 @@ workflow:
       when: never
     - if: '$CI_COMMIT_BRANCH'
 
-stages: [check, test, build, release, publish]
+stages: [prepare, check, test, build, release, publish]
 
 variables:
   RELEASE_COMPONENT:
@@ -25,6 +25,18 @@ variables:
     value: fix
     options: [fix, minor, major]
     description: Incrément de version (modifiable dans le formulaire du job release).
+
+build-env:
+  stage: prepare
+  image: quay.io/buildah/stable
+  script:
+    - buildah bud -t $CI_REGISTRY_IMAGE/ci-env:$CI_COMMIT_REF_SLUG -f .gitlab/ci/Dockerfile .
+    - buildah login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - buildah push $CI_REGISTRY_IMAGE/ci-env:$CI_COMMIT_REF_SLUG
+  rules:
+    # Ne reconstruit l'image que si le Dockerfile a changé !
+    - changes:
+        - .gitlab/ci/Dockerfile
 
 check:
   extends: .rust
