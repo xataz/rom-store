@@ -1,4 +1,9 @@
+.base:
+  tags:
+    - self
+
 .rust:
+  extends: .base
   image:
     name: build-romstore
     entrypoint: ['']

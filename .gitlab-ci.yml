@@ -72,6 +72,7 @@ build:
       dotenv: dist/release.env
 
 notes:
+  extends: .base
   image:
     name: orhunp/git-cliff:2.10.1
     entrypoint: ['']
@@ -90,6 +91,7 @@ notes:
     - if: '$CI_COMMIT_TAG =~ /^(client|server)-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$/'
 
 generate-releases:
+  extends: .base
   image:
     name: build-romstore
     entrypoint: ['']
@@ -118,6 +120,7 @@ release:
     - if: '$CI_COMMIT_BRANCH == "main"'
 
 publish:
+  extends: .base
   image: registry.gitlab.com/gitlab-org/cli:v1.76.0
   stage: publish
   resource_group: publish-$CI_COMMIT_TAG
