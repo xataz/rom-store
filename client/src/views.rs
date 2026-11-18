@@ -259,6 +259,7 @@ impl App {
 
     fn draw_header(&self, canvas: &mut Scene, painter: &mut Painter) -> Result<()> {
         let l = self.config.language;
+        let download = active_download(&self.jobs);
         for (x, y, color) in [
             (40, 25, ACCENT),
             (57, 25, ACCENT),
@@ -284,20 +285,31 @@ impl App {
             (90, 58),
             10,
             if self.reloading { ACCENT } else { MUTED },
-            430,
+            if download.is_some() { 290 } else { 430 },
         )?;
         painter.pill(canvas, l.text("menu_shortcut"), (1000, 30), ACCENT)?;
-        if let Some((position, total, job)) = active_download(&self.jobs) {
-            ui::panel(canvas, Rect::new(24, 12, 480, 68), true)?;
+        if let Some((position, total, job)) = download {
+            // Centered in the 1280-pixel logical viewport, between branding and menu.
+            ui::panel(canvas, Rect::new(400, 8, 480, 72), true)?;
+            let fraction = job_fraction(job);
             painter.text(
                 canvas,
                 &l.format("download_notification", &[&position, &total]),
-                (42, 20),
+                (418, 15),
                 14,
                 ACCENT,
-                444,
+                366,
             )?;
-            painter.text(canvas, &job.name, (42, 43), 20, TEXT, 444)?;
+            painter.text(
+                canvas,
+                &format!("{:.0}%", fraction * 100.0),
+                (802, 15),
+                14,
+                ACCENT,
+                60,
+            )?;
+            painter.text(canvas, &job.name, (418, 36), 18, TEXT, 444)?;
+            ui::progress(canvas, Rect::new(418, 65, 444, 6), fraction, ACCENT)?;
         }
         ui::rounded(canvas, Rect::new(40, 86, 1200, 1), 0, BORDER)
     }

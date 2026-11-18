@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub const SCENES: usize = 48;
+pub const SCENES: usize = 50;
 
 fn media(id: char, role: &str) -> File {
     File {
@@ -429,7 +429,11 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
                 done: false,
                 succeeded: false,
                 started: Some(Instant::now()),
-                progress: None,
+                progress: Some(Progress {
+                    completed: 42 * 1024 * 1024,
+                    total: 100 * 1024 * 1024,
+                    message: l.text("in_progress").into(),
+                }),
             });
         }
         33 => {
@@ -536,6 +540,17 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
             app.screen = Screen::Queue;
             app.clear_completed_jobs();
         }
+        48 | 49 => {
+            app.screen = Screen::Games;
+            let job = app.jobs.last_mut().unwrap();
+            job.name =
+                "Les voyageurs de l'aube — Une très longue aventure à travers les étoiles".into();
+            job.progress = (frame == 49).then(|| Progress {
+                completed: 100,
+                total: 100,
+                message: String::new(),
+            });
+        }
         _ => unreachable!(),
     }
     Ok([
@@ -587,5 +602,7 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
         "multi-selection-empty",
         "queue-focus-current",
         "queue-cleaned",
+        "download-notification-zero",
+        "download-notification-full",
     ][frame])
 }
