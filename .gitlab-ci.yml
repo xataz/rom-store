@@ -85,7 +85,7 @@ build:server:
         - Cargo.toml
         - Cargo.lock
         - .gitlab-ci.yml
-      when: manuel
+      when: manual
 
 release:
   extends: .release-template
