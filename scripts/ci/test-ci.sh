@@ -222,9 +222,13 @@ EOF
     git config url.https://gitlab-ci-token:runner-token@gitlab.example.test/.insteadOf https://gitlab.example.test/
     git config 'http.https://gitlab.example.test/.extraHeader' 'Authorization: Basic runner-credentials'
     git config 'credential.https://gitlab.example.test.helper' '!echo password=runner-token'
+    # Les runners récents interdisent les prompts, y compris GIT_ASKPASS.
+    git config credential.interactive false
     expect_failure env GIT_EXEC_PATH="$helpers" CI_COMMIT_BRANCH=main CI_PIPELINE_SOURCE=parent_pipeline \
         CI_COMMIT_REF_PROTECTED=true CI_PROJECT_URL=https://gitlab.example.test/project \
-        GITLAB_RELEASE_TOKEN=release-token bash scripts/ci/gitlab-release.sh client fix "$(git rev-parse HEAD)"
+        GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.interactive GIT_CONFIG_VALUE_0=false \
+        GIT_ASKPASS=/bin/false GITLAB_RELEASE_TOKEN=release-token \
+        bash scripts/ci/gitlab-release.sh client fix "$(git rev-parse HEAD)"
     [[ $(cat "$AUTH_URL_LOG") == https://oauth2@gitlab.example.test/project.git ]] || fail 'URL réécrite avec le jeton du runner'
     grep -qx 'username=oauth2' "$AUTH_CREDENTIALS"
     grep -qx 'password=release-token' "$AUTH_CREDENTIALS"

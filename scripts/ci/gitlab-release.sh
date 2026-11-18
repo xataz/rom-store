@@ -13,15 +13,7 @@ case "$type" in fix|minor|major) ;; *) die 'Type attendu : fix, minor ou major' 
 [[ ${CI_PROJECT_URL:-} =~ ^https://[^/@?#]+(/[^?#]*)?$ ]] || die 'CI_PROJECT_URL doit être une URL HTTPS sans identifiants'
 [[ $(git rev-parse HEAD) == "$expected" ]] || die 'Le checkout ne correspond pas au commit parent'
 
-temporary=$(mktemp -d)
-trap 'rm -f -- "$temporary/askpass.sh"; rmdir -- "$temporary"' EXIT
-cat > "$temporary/askpass.sh" <<'EOF'
-#!/usr/bin/env bash
-# Le nom d'utilisateur est explicite dans l'URL : seul le mot de passe est demandé.
-printf '%s\n' "$GITLAB_RELEASE_TOKEN"
-EOF
-chmod 700 "$temporary/askpass.sh"
-export GIT_ASKPASS="$temporary/askpass.sh" GIT_TERMINAL_PROMPT=0
+export GIT_TERMINAL_PROMPT=0
 # Le runner peut réécrire https://host/... vers une URL contenant CI_JOB_TOKEN.
 # L'utilisateur explicite évite cette réécriture, sans mettre de secret dans l'URL.
 release_url="https://oauth2@${CI_PROJECT_URL#https://}"
@@ -30,6 +22,11 @@ git remote set-url origin "$release_url"
 git remote set-url --push origin "$release_url"
 git config --local credential.helper ''
 git config --local "credential.$release_url.helper" ''
+# Les helpers fonctionnent même avec credential.interactive=false, contrairement
+# à GIT_ASKPASS. Les quotes simples conservent une référence à la variable :
+# aucune valeur de jeton n'est écrite dans .git/config. Ignorer store/erase.
+git config --local --add "credential.$release_url.helper" \
+    '!f() { if test "$1" = get; then printf "%s\n" "username=oauth2" "password=$GITLAB_RELEASE_TOKEN"; fi; }; f'
 git config --local "http.$release_url.extraHeader" ''
 assert_current "$expected"
 git fetch origin --tags
@@ -39,7 +36,7 @@ if ! component_pending "$component"; then die 'Aucun changement à publier pour 
 if ! git push --dry-run origin HEAD:refs/heads/main; then
     die 'Accès Git en écriture refusé avec GITLAB_RELEASE_TOKEN ; vérifier sa valeur, son rôle et les protections du dépôt'
 fi
-git switch -c "release-${component}-${temporary##*/}" "$expected"
+git switch -c "release-${component}-${CI_JOB_ID:-$BASHPID}-$RANDOM" "$expected"
 git config user.name 'ROM Store Release'
 git config user.email 'romstore-release@users.noreply.gitlab.com'
 make "release-$component" TYPE="$type"

@@ -36,10 +36,14 @@ de tag pour le registre générique et l'API Releases ; aucun droit `api` n'est
 nécessaire sur le jeton de push.
 
 Le script fixe explicitement l'utilisateur `oauth2` dans les URL de lecture et
-de push, fournit le jeton uniquement via `GIT_ASKPASS` et neutralise les helpers
-de credentials et en-têtes HTTP hérités pour cette URL. Cela évite notamment
+de push et utilise un helper Git non interactif qui lit `GITLAB_RELEASE_TOKEN`
+depuis l'environnement. Les helpers de credentials et en-têtes HTTP hérités
+sont neutralisés pour cette URL. Cela évite notamment
 qu'une réécriture d'URL du runner remplace le jeton de release par `CI_JOB_TOKEN`.
-Le secret n'est jamais enregistré dans l'URL ou la configuration Git.
+La configuration conserve seulement la référence à la variable, jamais la valeur
+du secret. Le helper n'enregistre aucun credential et n'utilise aucun fichier
+exécutable temporaire. Il fonctionne aussi lorsque le runner impose
+`credential.interactive=false`, qui peut empêcher l'utilisation de `GIT_ASKPASS`.
 
 Un push en **dry-run** vérifie l'accès au service Git en écriture avant les
 compilations et la création du commit de version. Ce contrôle ne remplace pas
