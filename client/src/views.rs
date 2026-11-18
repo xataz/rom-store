@@ -10,6 +10,18 @@ use sdl2::{pixels::Color, rect::Rect, render::Canvas, video::Window};
 
 type Scene = Canvas<Window>;
 
+fn active_download(jobs: &[Job]) -> Option<(usize, usize, &Job)> {
+    let total = jobs
+        .iter()
+        .filter(|job| job.kind == JobKind::Install)
+        .count();
+    jobs.iter()
+        .filter(|job| job.kind == JobKind::Install)
+        .enumerate()
+        .find(|(_, job)| job.started.is_some() && !job.done)
+        .map(|(index, job)| (index + 1, total, job))
+}
+
 fn job_fraction(job: &Job) -> f64 {
     if job.succeeded {
         return 1.0;
@@ -89,6 +101,18 @@ impl App {
             Screen::Queue => self.draw_queue(canvas, painter)?,
         }
         self.draw_footer(canvas, painter)?;
+        if let Some(menu) = &self.menu {
+            menu.draw(
+                canvas,
+                painter,
+                &self.config,
+                self.reloading,
+                self.frontend_refreshing,
+            )?;
+        }
+        if let Some(advanced) = &self.advanced {
+            advanced.draw(canvas, painter, self.config.language)?;
+        }
         if let Some(search) = &self.search {
             search.draw(
                 canvas,
@@ -96,6 +120,9 @@ impl App {
                 self.config.language,
                 search.scope.as_deref().map(|id| self.system_name(id)),
             )?;
+        }
+        if let Some(alphabet) = &self.alphabet {
+            alphabet.draw(canvas, painter, self.config.language)?;
         }
         if self.uninstall_confirmation.is_some() {
             self.draw_uninstall_confirmation(canvas, painter)?;
@@ -192,32 +219,19 @@ impl App {
             if self.reloading { ACCENT } else { MUTED },
             430,
         )?;
-        let section = usize::from(self.screen == Screen::Queue);
-        for (index, label) in [l.text("nav_platforms"), l.text("nav_transfers")]
-            .iter()
-            .enumerate()
-        {
-            let x = 570 + index as i32 * 220;
-            if section == index {
-                ui::rounded(canvas, Rect::new(x - 14, 23, 206, 38), 10, SURFACE)?;
-                ui::rounded(canvas, Rect::new(x, 76, 36, 3), 1, ACCENT)?;
-            }
+        painter.pill(canvas, l.text("menu_shortcut"), (1000, 30), ACCENT)?;
+        if let Some((position, total, job)) = active_download(&self.jobs) {
+            ui::panel(canvas, Rect::new(24, 12, 480, 68), true)?;
             painter.text(
                 canvas,
-                label,
-                (x, 33),
-                17,
-                if section == index { TEXT } else { MUTED },
-                192,
+                &l.format("download_notification", &[&position, &total]),
+                (42, 20),
+                14,
+                ACCENT,
+                444,
             )?;
+            painter.text(canvas, &job.name, (42, 43), 20, TEXT, 444)?;
         }
-        let active = self.jobs.iter().filter(|job| !job.done).count();
-        painter.pill(
-            canvas,
-            &l.format("active_transfers", &[&active]),
-            (1030, 30),
-            if active > 0 { ACCENT } else { MUTED },
-        )?;
         ui::rounded(canvas, Rect::new(40, 86, 1200, 1), 0, BORDER)
     }
 
@@ -278,27 +292,11 @@ impl App {
             ui::panel(canvas, Rect::new(40, y, 352, 64), selected)?;
             painter.text(
                 canvas,
-                &format!("{:02}", index + 1),
-                (56, y + 20),
-                17,
-                if selected { ACCENT } else { MUTED },
-                34,
-            )?;
-            painter.text(
-                canvas,
                 system.display_name(),
-                (104, y + 9),
+                (56, y + 18),
                 23,
                 if selected { ACCENT } else { TEXT },
-                247,
-            )?;
-            painter.text(
-                canvas,
-                &l.format("games_discover", &[&system.game_count]),
-                (105, y + 38),
-                13,
-                MUTED,
-                250,
+                320,
             )?;
         }
         if self.systems.len() > 6 {
@@ -408,7 +406,9 @@ impl App {
             .catalog_system
             .as_ref()
             .map_or(l.text("all_platforms"), |id| self.system_name(id));
-        let eyebrow = if self.search_query.is_empty() {
+        let eyebrow = if !self.filters.is_empty() {
+            l.format("advanced_active", &[&self.filters.len()])
+        } else if self.search_query.is_empty() {
             l.text("collection_eyebrow").to_owned()
         } else {
             l.format("search_results", &[&self.search_query])
@@ -425,7 +425,7 @@ impl App {
             ACCENT,
         )?;
         if self.loading {
-            // Only the initial request replaces the catalogue with placeholders.
+            // Initial loads and alphabet jumps use placeholders; scrolling does not.
             for index in 0..GRID_COLUMNS * GRID_ROWS {
                 let x = 40 + (index % GRID_COLUMNS) as i32 * 242;
                 let y = 184 + (index / GRID_COLUMNS) as i32 * 196;
@@ -444,11 +444,15 @@ impl App {
             );
         };
         if page.items.is_empty() {
-            if !self.search_query.is_empty() {
+            if !self.search_query.is_empty() || !self.filters.is_empty() {
                 return empty(
                     canvas,
                     painter,
-                    &l.format("search_no_results", &[&self.search_query]),
+                    &if self.search_query.is_empty() {
+                        l.text("advanced_no_results").to_owned()
+                    } else {
+                        l.format("search_no_results", &[&self.search_query])
+                    },
                     l.text("search_empty_help"),
                 );
             }
@@ -456,12 +460,15 @@ impl App {
         }
         painter.pill(
             canvas,
-            &l.format("catalog_position", &[&(self.game_index + 1), &page.total]),
+            &l.format(
+                "catalog_position",
+                &[&(page.offset + self.game_index + 1), &page.total],
+            ),
             (1010, 133),
             MUTED,
         )?;
         if self.catalog_pending.is_some() {
-            painter.text(canvas, l.text("loading_more"), (940, 110), 13, ACCENT, 300)?;
+            painter.text(canvas, l.text("loading_more"), (780, 145), 13, ACCENT, 210)?;
         }
         if self.config.games_view == ViewMode::List {
             return self.draw_game_list(canvas, painter);
@@ -539,15 +546,7 @@ impl App {
         }
         if let Some(game) = page.items.get(self.game_index) {
             ui::rounded(canvas, Rect::new(40, 582, 1200, 40), 10, SURFACE)?;
-            painter.text(
-                canvas,
-                &format!("{:03}", page.offset + self.game_index + 1),
-                (56, 593),
-                15,
-                ACCENT,
-                48,
-            )?;
-            painter.text(canvas, &game.name, (116, 589), 21, TEXT, 790)?;
+            painter.text(canvas, &game.name, (56, 589), 21, TEXT, 850)?;
             painter.text(canvas, l.text("quick_actions"), (930, 595), 14, MUTED, 294)?;
         }
         Ok(())
@@ -565,23 +564,11 @@ impl App {
             ui::panel(canvas, Rect::new(40, y, 456, 43), selected)?;
             painter.text(
                 canvas,
-                &format!("{:03}", page.offset + index + 1),
-                (54, y + 14),
-                12,
-                MUTED,
-                42,
-            )?;
-            painter.text(
-                canvas,
-                &if self.catalog_system.is_none() {
-                    format!("{} · {}", game.name, self.system_name(&game.system))
-                } else {
-                    game.name.clone()
-                },
-                (106, y + 10),
+                &game.name,
+                (56, y + 10),
                 18,
                 if selected { ACCENT } else { TEXT },
-                if game.installed { 332 } else { 374 },
+                if game.installed { 382 } else { 424 },
             )?;
             if game.installed {
                 painter.text(canvas, "✓", (458, y + 10), 20, ACCENT, 26)?;
@@ -951,86 +938,20 @@ impl App {
             1184,
         )?;
         ui::rounded(canvas, Rect::new(40, 665, 1200, 1), 0, BORDER)?;
-        if self.screen == Screen::Games {
-            let mut x = painter.hint(canvas, l.text("enter_key"), l.text("details"), 40)?;
-            x = painter.hint(canvas, "V / R3", l.text("change_view"), x)?;
-            x = painter.hint(canvas, l.text("escape_key"), l.text("back"), x)?;
-            x = painter.hint(canvas, "Tab / X", l.text("queue"), x)?;
-            x = painter.hint(canvas, "F / L3", l.text("search"), x)?;
-            if !self.reloading {
-                painter.hint(canvas, "F5 / L1", l.text("reload"), x)?;
+        let label = match self.screen {
+            Screen::Games => l.text("details"),
+            Screen::Queue => l.text("cancel"),
+            Screen::Detail if self.detail.as_ref().is_some_and(|game| game.installed) => {
+                l.text("uninstall")
             }
-            return Ok(());
-        }
-        let mut x = 40;
-        if self.screen != Screen::Detail {
-            x = painter.hint(
-                canvas,
-                if self.screen == Screen::Games
-                    || (self.screen == Screen::Systems
-                        && self.config.systems_view == ViewMode::Grid)
-                {
-                    "↑ ↓ ← →"
-                } else {
-                    "↑ ↓"
-                },
-                l.text("navigate"),
-                x,
-            )?;
-        }
-        if self.screen != Screen::Queue {
-            let installable = self
-                .detail
-                .as_ref()
-                .is_some_and(|game| game.installable || game.installed);
-            if self.screen != Screen::Detail || installable {
-                x = painter.hint(
-                    canvas,
-                    l.text("enter_key"),
-                    if self.screen == Screen::Detail {
-                        if self.detail.as_ref().is_some_and(|game| game.installed) {
-                            l.text("uninstall")
-                        } else {
-                            l.text("install")
-                        }
-                    } else {
-                        l.text("choose")
-                    },
-                    x,
-                )?;
-            }
-        }
-        if self.screen == Screen::Systems {
-            x = painter.hint(canvas, "V / R3", l.text("change_view"), x)?;
+            Screen::Detail => l.text("install"),
+            Screen::Systems => l.text("choose"),
+        };
+        let x = painter.hint(canvas, l.text("enter_key"), label, 40)?;
+        let mut x = painter.hint(canvas, l.text("back_key"), l.text("back"), x)?;
+        if matches!(self.screen, Screen::Systems | Screen::Games) {
             x = painter.hint(canvas, "F / L3", l.text("search"), x)?;
-        }
-        x = painter.hint(
-            canvas,
-            l.text("escape_key"),
-            if self.screen == Screen::Systems {
-                l.text("quit")
-            } else {
-                l.text("back")
-            },
-            x,
-        )?;
-        x = painter.hint(
-            canvas,
-            "Tab / X",
-            if self.screen == Screen::Queue {
-                l.text("platforms")
-            } else {
-                l.text("queue")
-            },
-            x,
-        )?;
-        if self.screen == Screen::Queue
-            && self.jobs.get(self.queue_index).is_some_and(|job| !job.done)
-        {
-            painter.hint(canvas, l.text("cancel_key"), l.text("cancel"), x)?;
-        }
-        if self.screen == Screen::Systems && !self.reloading {
-            painter.hint(canvas, "F5 / L1", l.text("reload"), x)?;
+            painter.hint(canvas, "L / R1", l.text("alphabet_jump"), x)?;
         }
         Ok(())
     }
@@ -1039,6 +960,33 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn notification_only_counts_downloads_and_never_promotes_waiting_jobs() {
+        let job = |kind, done, started| Job {
+            kind,
+            done,
+            started,
+            game_id: String::new(),
+            name: "Download".into(),
+            cancel: Default::default(),
+            state: String::new(),
+            succeeded: false,
+            progress: None,
+        };
+        let mut jobs = vec![
+            job(JobKind::Uninstall, false, Some(std::time::Instant::now())),
+            job(JobKind::Install, true, Some(std::time::Instant::now())),
+            job(JobKind::Install, false, Some(std::time::Instant::now())),
+            job(JobKind::Install, false, None),
+        ];
+        assert_eq!(
+            active_download(&jobs).map(|(position, total, _)| (position, total)),
+            Some((2, 3))
+        );
+        jobs[2].done = true;
+        assert!(active_download(&jobs).is_none());
+    }
 
     #[test]
     fn progress_is_bounded_even_for_inconsistent_server_totals() {

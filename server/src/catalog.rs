@@ -121,6 +121,18 @@ impl Catalog {
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
             |context| Ok(casefold(&context.get::<String>(0)?)),
         )?;
+        db.create_scalar_function(
+            "METADATA_MATCH",
+            3,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            |context| {
+                Ok(crate::filters::matches(
+                    &context.get::<String>(0)?,
+                    &context.get::<String>(1)?,
+                    &context.get::<String>(2)?,
+                ))
+            },
+        )?;
         Ok(db)
     }
 
@@ -217,6 +229,33 @@ impl Catalog {
         offset: u64,
         limit: u64,
     ) -> Result<GamePage> {
+        self.filtered_page(system, search, offset, limit, &Default::default())
+    }
+
+    pub fn filter_fields(&self) -> Result<Vec<String>> {
+        let db = self.connect()?;
+        let mut query = db.prepare("SELECT DISTINCT m.key FROM games g, json_each(json_extract(g.payload, '$.metadata')) m ORDER BY m.key")?;
+        let mut fields = query
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<std::collections::BTreeSet<_>>>()?;
+        fields.extend([
+            "name".into(),
+            "year".into(),
+            "players".into(),
+            "path".into(),
+        ]);
+        Ok(fields.into_iter().collect())
+    }
+
+    pub fn filtered_page(
+        &self,
+        system: Option<&str>,
+        search: &str,
+        offset: u64,
+        limit: u64,
+        criteria: &crate::filters::Filters,
+    ) -> Result<GamePage> {
+        crate::filters::validate(criteria)?;
         if !(1..=200).contains(&limit) || offset > i64::MAX as u64 || search.chars().count() > 256 {
             bail!("Paramètres invalides");
         }
@@ -225,15 +264,38 @@ impl Catalog {
         // One read snapshot for the count and selected items, even during publication.
         // Avoid optional-parameter ORs (which hide the system index from SQLite)
         // and avoid folding every name just to count an unfiltered catalogue.
-        let mut filters = Vec::new();
+        let mut filters: Vec<String> = Vec::new();
         let mut values: Vec<rusqlite::types::Value> = Vec::new();
         if let Some(system) = system {
-            filters.push("json_extract(payload, '$.system') = ?");
+            filters.push("json_extract(payload, '$.system') = ?".into());
             values.push(system.to_owned().into());
         }
         if !search.is_empty() {
-            filters.push("instr(CASEFOLD(json_extract(payload, '$.name')), ?) > 0");
+            filters.push("instr(CASEFOLD(json_extract(payload, '$.name')), ?) > 0".into());
             values.push(casefold(search).into());
+        }
+        for (field, criterion) in criteria
+            .iter()
+            .filter(|(_, value)| !value.trim().is_empty())
+        {
+            if field == "name" || field == "path" {
+                filters.push("METADATA_MATCH(json_extract(payload, ?), ?, ?)".into());
+                values.push(format!("$.{field}").into());
+                values.push(criterion.clone().into());
+                values.push(field.clone().into());
+            } else {
+                filters.push("EXISTS (SELECT 1 FROM json_each(json_extract(games.payload, '$.metadata')) m WHERE m.key = ? AND METADATA_MATCH(m.value, ?, ?))".into());
+                values.push(
+                    if field == "year" {
+                        "releasedate".into()
+                    } else {
+                        field.clone()
+                    }
+                    .into(),
+                );
+                values.push(criterion.clone().into());
+                values.push(field.clone().into());
+            }
         }
         let filter = if filters.is_empty() {
             String::new()

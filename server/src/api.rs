@@ -44,6 +44,7 @@ pub fn router_with_reload(catalog: Catalog, reload: Reload) -> Router {
         .route("/api/v1/catalog/summary", get(catalog_summary))
         .route("/api/v1/catalog/issues", get(catalog_issues))
         .route("/api/v1/games", get(games))
+        .route("/api/v1/games/fields", get(filter_fields))
         .route("/api/v1/games/{game_id}", get(detail))
         .route("/api/v1/games/{game_id}/manifest", get(manifest))
         .route("/api/v1/files/{file_id}", get(download))
@@ -165,6 +166,8 @@ struct GameQuery {
     #[serde(default)]
     search: String,
     #[serde(default)]
+    filters: String,
+    #[serde(default)]
     offset: u64,
     #[serde(default = "default_limit")]
     limit: u64,
@@ -173,7 +176,7 @@ fn default_limit() -> u64 {
     50
 }
 
-#[utoipa::path(get, path="/api/v1/games", params(("system"=Option<String>, Query), ("search"=Option<String>, Query, max_length=256), ("offset"=Option<u64>, Query, minimum=0), ("limit"=Option<u64>, Query, minimum=1, maximum=200)), responses((status=200, body=GamePage), (status=422, description="Paramètres invalides")))]
+#[utoipa::path(get, path="/api/v1/games", params(("system"=Option<String>, Query), ("search"=Option<String>, Query, max_length=256), ("filters"=Option<String>, Query, description="Objet JSON champ: critère ; texte, =exact, >=min, <=max ; year extrait releasedate ; players accepte les plages"), ("offset"=Option<u64>, Query, minimum=0), ("limit"=Option<u64>, Query, minimum=1, maximum=200)), responses((status=200, body=GamePage), (status=422, description="Paramètres invalides")))]
 async fn games(
     State(state): State<AppState>,
     query: Result<Query<GameQuery>, QueryRejection>,
@@ -187,25 +190,46 @@ async fn games(
     if !(1..=200).contains(&query.limit)
         || query.offset > i64::MAX as u64
         || query.search.chars().count() > 256
+        || query.filters.len() > 16384
     {
         return Err(ApiError(
             StatusCode::UNPROCESSABLE_ENTITY,
             "Paramètres invalides".into(),
         ));
     }
+    let filters: crate::filters::Filters = if query.filters.is_empty() {
+        Default::default()
+    } else {
+        serde_json::from_str(&query.filters).map_err(|_| {
+            ApiError(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Filtres JSON invalides".into(),
+            )
+        })?
+    };
+    crate::filters::validate(&filters)
+        .map_err(|error| ApiError(StatusCode::UNPROCESSABLE_ENTITY, error.to_string()))?;
     Ok(Json(
         blocking(move || {
             state
                 .catalog
-                .page(
+                .filtered_page(
                     query.system.as_deref(),
                     &query.search,
                     query.offset,
                     query.limit,
+                    &filters,
                 )
                 .map_err(internal)
         })
         .await?,
+    ))
+}
+
+#[utoipa::path(get, path="/api/v1/games/fields", responses((status=200, body=Vec<String>)))]
+async fn filter_fields(State(state): State<AppState>) -> Result<Json<Vec<String>>, ApiError> {
+    Ok(Json(
+        blocking(move || state.catalog.filter_fields().map_err(internal)).await?,
     ))
 }
 
@@ -341,6 +365,7 @@ async fn download(
         catalog_summary,
         catalog_issues,
         games,
+        filter_fields,
         detail,
         manifest,
         reload_catalog,

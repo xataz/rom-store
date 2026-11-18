@@ -1,4 +1,4 @@
-//! Optional local frontend refresh, after installation writes and SDL shutdown.
+//! Optional local frontend refresh, manually when idle or after SDL shutdown.
 //! Frontend commands come only from the user's local configuration, never the API.
 use crate::config::{Config, Frontend};
 use anyhow::{bail, Context, Result};

@@ -139,6 +139,65 @@ async fn catalog_manifest_and_streaming_preserve_api_v1() {
     }
 }
 
+#[tokio::test]
+async fn advanced_metadata_filters_are_combined_before_counting_and_pagination() {
+    let f = Fixture::new();
+    f.xml("<gameList>
+        <game><path>demo.nes</path><name>Alpha</name><releasedate>19911224T000000</releasedate><players>1-4</players><genre>Action</genre><rating>0.8</rating><custom>Démo</custom></game>
+        <game><path>second.nes</path><name>Beta</name><releasedate>19910101T000000</releasedate><players>2</players><genre>RPG</genre><rating>0.9</rating><custom>Démo</custom></game>
+        <game><path>third.nes</path><name>Gamma</name><releasedate>20010101T000000</releasedate><players>1</players><genre>Action</genre></game>
+    </gameList>");
+    fs::write(f.system().join("second.nes"), b"second").unwrap();
+    fs::write(f.system().join("third.nes"), b"third").unwrap();
+    f.catalog.reindex().unwrap();
+    let (status, fields) = f.json("GET", "/api/v1/games/fields").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(fields.as_array().unwrap().contains(&json!("custom")));
+    assert!(fields.as_array().unwrap().contains(&json!("year")));
+    let path = |filters: Value, offset: usize| {
+        let mut url = reqwest::Url::parse("http://localhost/api/v1/games").unwrap();
+        url.query_pairs_mut()
+            .append_pair("system", "nes")
+            .append_pair("filters", &filters.to_string())
+            .append_pair("limit", "1")
+            .append_pair("offset", &offset.to_string());
+        format!("{}?{}", url.path(), url.query().unwrap())
+    };
+    let filters = json!({"year":"1991", "players":"2", "custom":"=démo", "rating":">=0.8"});
+    for (offset, name) in [(0, "Alpha"), (1, "Beta")] {
+        let (status, page) = f.json("GET", &path(filters.clone(), offset)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(page["total"], 2);
+        assert_eq!(page["items"].as_array().unwrap().len(), 1);
+        assert_eq!(page["items"][0]["name"], name);
+    }
+    for (filters, total) in [
+        (json!({"year":">=2000", "players":"2"}), 0),
+        (json!({"name":"=beta", "genre":"rpg"}), 1),
+        (json!({"unknown":"value"}), 0),
+        (json!({"genre":"%"}), 0),
+        (json!({"custom":"' OR 1=1 --"}), 0),
+    ] {
+        let (status, page) = f.json("GET", &path(filters, 0)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(page["total"], total);
+    }
+    for filters in [
+        json!({"bad'key":"x"}),
+        json!({"genre":"x".repeat(257)}),
+        json!(["not a map"]),
+    ] {
+        assert_eq!(
+            f.json("GET", &path(filters, 0)).await.0,
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+    }
+    assert_eq!(
+        f.json("GET", "/api/v1/games?filters=not-json").await.0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+}
+
 #[test]
 fn python_identifiers_revisions_and_cache_remain_compatible() {
     let f = Fixture::new();

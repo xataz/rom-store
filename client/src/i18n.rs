@@ -136,6 +136,9 @@ mod tests {
             include_str!("fonts.rs"),
             include_str!("smoke.rs"),
             include_str!("search.rs"),
+            include_str!("alphabet.rs"),
+            include_str!("advanced.rs"),
+            include_str!("menu.rs"),
         ] {
             for marker in [".text(", ".format("] {
                 for tail in source.split(marker).skip(1) {

@@ -1,4 +1,38 @@
 tagline: UNE NOUVELLE PARTIE VOUS ATTEND
+menu_title: Menu
+menu_shortcut: Start / Échap · Menu
+menu_systems_view: Vue des consoles
+menu_games_view: Vue des ROMs
+menu_reload: Recharger le catalogue serveur
+menu_refresh: Actualiser les jeux du frontend
+menu_controls: "↑ ↓ : choisir · ← → / A : modifier · A : ouvrir · B / Retour : fermer"
+back_key: Retour / B
+download_notification: "Téléchargement {0} / {1}"
+refresh_running: Actualisation du frontend en cours…
+refresh_complete: Actualisation des jeux demandée au frontend.
+refresh_busy: Attendez la fin des opérations locales avant d'actualiser les jeux.
+refresh_failed: "Actualisation du frontend impossible : {0}"
+advanced_title: Recherche avancée
+advanced_no_results: Aucun jeu ne correspond aux filtres.
+advanced_help: "Texte partiel · =exact · >=minimum · <=maximum · Critères combinés"
+advanced_loading: Chargement des champs du gamelist.xml…
+advanced_fields_failed: "Recherche avancée indisponible : {0} (vérifier la version du serveur)"
+advanced_controls: "↑ ↓ : champ · A : saisir · ← → : plateforme · B / Retour : annuler"
+advanced_apply: Appliquer les filtres
+advanced_clear: Effacer tous les filtres
+advanced_active: "RECHERCHE AVANCÉE · {0} FILTRES"
+filter_platform: Plateforme
+filter_name: Nom
+filter_year: Année
+filter_genre: Genre
+filter_publisher: Éditeur
+filter_rating: Note (0–1)
+filter_any: Indifférent
+filter_value: Valeur du filtre
+alphabet_jump: Lettre
+alphabet_title: Aller directement à une lettre
+alphabet_controls: "↑ ↓ ← → : choisir · Entrée / A : valider · Retour / B : annuler · Clavier : lettre directe"
+alphabet_missing: "Aucun nom ne commence par {0}."
 nav_platforms: 01  Plateformes
 nav_transfers: 02  Téléchargements
 active_transfers: "{0} en attente / en cours"
@@ -110,7 +144,7 @@ uninstall_job: "Désinstaller : {0}"
 uninstall_preserved: ROM locale + entrée XML uniquement · médias et sauvegardes conservés.
 uninstall_confirm_title: Désinstaller ce jeu ?
 uninstall_confirm_body: La ROM sera supprimée du dossier ROMs du client et son entrée retirée de gamelist.xml. Les médias et les sauvegardes seront conservés.
-uninstall_confirm_controls: "← → : choisir · A / Entrée : valider · B / Échap : annuler"
+uninstall_confirm_controls: "← → : choisir · A / Entrée : valider · B / Retour : annuler"
 operation_pending: Opération déjà en attente / en cours
 screenshot: CAPTURE D'ÉCRAN
 screenshot_missing: AUCUNE CAPTURE
@@ -121,8 +155,8 @@ all_platforms: Toutes les plateformes
 search_platform: "Plateforme : {0}"
 space_key: Espace
 clear_search: Eff.
-search_keyboard_hint: "Saisie clavier ou A : caractère · X : effacer · Start/Entrée : chercher · B/Échap : fermer"
-search_scope_hint: "Tab / Y : cette plateforme ou toutes · Suppr : vider la saisie"
+search_keyboard_hint: "Clavier ou A : caractère · OK / Entrée : valider · B : fermer · Start / Échap : menu"
+search_scope_hint: "Touche Plateforme : cette plateforme ou toutes · ← : effacer · Effacer : vider"
 search_global_hint: "Recherche sur toutes les plateformes · Suppr : vider la saisie"
 search_results: "RECHERCHE : {0}"
 search_no_results: "Aucun jeu pour « {0} »."

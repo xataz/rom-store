@@ -9,7 +9,7 @@ use sdl2::{
     controller::Button, event::Event, keyboard::Keycode, rect::Rect, render::Canvas, video::Window,
 };
 
-const CHARACTERS: &str = "abcdefghijklmnopqrstuvwxyz0123456789 -'&";
+const CHARACTERS: &str = "abcdefghijklmnopqrstuvwxyz0123456789 -'&.=<>+_/:";
 const COLUMNS: usize = 10;
 const MAX_QUERY: usize = 256;
 
@@ -24,6 +24,7 @@ pub(super) struct SearchDialog {
     pub scope: Option<String>,
     platform: Option<String>,
     selected: usize,
+    text_only: bool,
 }
 
 impl SearchDialog {
@@ -33,7 +34,19 @@ impl SearchDialog {
             scope,
             platform,
             selected: 0,
+            text_only: false,
         }
+    }
+
+    pub fn text_entry(query: String) -> Self {
+        Self {
+            text_only: true,
+            ..Self::new(query, None, None)
+        }
+    }
+
+    fn key_count(&self) -> usize {
+        CHARACTERS.chars().count() + 3 + usize::from(self.platform.is_some() && !self.text_only)
     }
 
     fn append(&mut self, text: &str) {
@@ -57,7 +70,7 @@ impl SearchDialog {
 
     pub fn action(&mut self, action: Action) -> Option<SearchOutcome> {
         let characters = CHARACTERS.chars().count();
-        let count = characters + 3;
+        let count = self.key_count();
         match action {
             Action::Up if self.selected >= COLUMNS => self.selected -= COLUMNS,
             Action::Down if self.selected / COLUMNS < (count - 1) / COLUMNS => {
@@ -72,12 +85,13 @@ impl SearchDialog {
                     self.query.pop();
                 } else if self.selected == characters + 1 {
                     self.query.clear();
-                } else {
+                } else if self.selected == characters + 2 {
                     return Some(SearchOutcome::Submit);
+                } else {
+                    self.toggle_scope();
                 }
             }
             Action::Back => return Some(SearchOutcome::Cancel),
-            Action::Secondary => self.toggle_scope(),
             _ => (),
         }
         None
@@ -91,13 +105,11 @@ impl SearchDialog {
                 repeat,
                 ..
             } => match *key {
-                Keycode::Escape if !repeat => return Some(SearchOutcome::Cancel),
                 Keycode::Return if !repeat => return Some(SearchOutcome::Submit),
                 Keycode::Backspace => {
                     self.query.pop();
                 }
                 Keycode::Delete => self.query.clear(),
-                Keycode::Tab if !repeat => self.toggle_scope(),
                 Keycode::Up => return self.action(Action::Up),
                 Keycode::Down => return self.action(Action::Down),
                 Keycode::Left => return self.action(Action::Left),
@@ -107,11 +119,6 @@ impl SearchDialog {
             Event::ControllerButtonDown { button, .. } => match button {
                 Button::A => return self.action(Action::Confirm),
                 Button::B | Button::LeftStick => return Some(SearchOutcome::Cancel),
-                Button::Start => return Some(SearchOutcome::Submit),
-                Button::X => {
-                    self.query.pop();
-                }
-                Button::Y => self.toggle_scope(),
                 _ => (),
             },
             _ => (),
@@ -128,12 +135,34 @@ impl SearchDialog {
     ) -> Result<()> {
         ui::dim(canvas, 205)?;
         ui::panel(canvas, Rect::new(200, 115, 880, 510), true)?;
-        painter.text(canvas, l.text("search_title"), (236, 138), 30, TEXT, 800)?;
+        painter.text(
+            canvas,
+            l.text(if self.text_only {
+                "filter_value"
+            } else {
+                "search_title"
+            }),
+            (236, 138),
+            30,
+            TEXT,
+            800,
+        )?;
         let scope = self.scope.as_ref().map_or_else(
             || l.text("all_platforms").to_owned(),
             |id| l.format("search_platform", &[&scope_name.unwrap_or(id)]),
         );
-        painter.text(canvas, &scope, (238, 184), 17, ACCENT, 800)?;
+        painter.text(
+            canvas,
+            if self.text_only {
+                l.text("advanced_help")
+            } else {
+                &scope
+            },
+            (238, 184),
+            17,
+            ACCENT,
+            800,
+        )?;
         ui::rounded(canvas, Rect::new(236, 220, 808, 50), 10, SURFACE)?;
         let mut tail = self.query.clone();
         while painter.width(&tail, 24) > 746.0 {
@@ -141,9 +170,9 @@ impl SearchDialog {
         }
         painter.text(canvas, &format!("{tail}_"), (252, 232), 24, TEXT, 774)?;
         let characters = CHARACTERS.chars().count();
-        for index in 0..characters + 3 {
+        for index in 0..self.key_count() {
             let x = 236 + (index % COLUMNS) as i32 * 81;
-            let y = 292 + (index / COLUMNS) as i32 * 48;
+            let y = 292 + (index / COLUMNS) as i32 * 40;
             let selected = self.selected == index;
             ui::rounded(
                 canvas,
@@ -156,7 +185,8 @@ impl SearchDialog {
                 Some(char) => char.to_uppercase().collect(),
                 None if index == characters => "←".into(),
                 None if index == characters + 1 => l.text("clear_search").into(),
-                None => "OK".into(),
+                None if index == characters + 2 => "OK".into(),
+                None => l.text("filter_platform").into(),
             };
             painter.text(
                 canvas,
@@ -177,7 +207,9 @@ impl SearchDialog {
         )?;
         painter.text(
             canvas,
-            if self.platform.is_some() {
+            if self.text_only {
+                l.text("advanced_help")
+            } else if self.platform.is_some() {
                 l.text("search_scope_hint")
             } else {
                 l.text("search_global_hint")
@@ -218,9 +250,9 @@ mod tests {
         let mut dialog = SearchDialog::new(String::new(), Some("nes".into()), Some("nes".into()));
         dialog.action(Action::Confirm);
         assert_eq!(dialog.query, "a");
-        dialog.action(Action::Secondary);
+        dialog.toggle_scope();
         assert_eq!(dialog.scope, None);
-        dialog.action(Action::Secondary);
+        dialog.toggle_scope();
         assert_eq!(dialog.scope.as_deref(), Some("nes"));
         dialog.selected = CHARACTERS.chars().count() + 2;
         assert_eq!(dialog.action(Action::Confirm), Some(SearchOutcome::Submit));

@@ -134,6 +134,8 @@ impl Api {
     pub fn systems(&self) -> Result<Vec<System>> {
         let mut systems: Vec<System> = self.json("systems", &[])?;
         systems.retain(|system| system.game_count > 0);
+        systems
+            .sort_by_cached_key(|system| (system.display_name().to_lowercase(), system.id.clone()));
         Ok(systems)
     }
 
@@ -168,15 +170,98 @@ impl Api {
     }
 
     pub fn games(&self, system: Option<&str>, offset: usize, search: &str) -> Result<Page> {
+        self.games_filtered(system, offset, search, &BTreeMap::new())
+    }
+
+    pub fn filter_fields(&self) -> Result<Vec<String>> {
+        self.json("games/fields", &[])
+    }
+
+    pub fn games_filtered(
+        &self,
+        system: Option<&str>,
+        offset: usize,
+        search: &str,
+        filters: &BTreeMap<String, String>,
+    ) -> Result<Page> {
+        self.games_page(system, offset, search, 50, filters)
+    }
+
+    fn games_page(
+        &self,
+        system: Option<&str>,
+        offset: usize,
+        search: &str,
+        limit: usize,
+        filters: &BTreeMap<String, String>,
+    ) -> Result<Page> {
         let mut query = vec![
             ("offset", offset.to_string()),
-            ("limit", "50".into()),
+            ("limit", limit.to_string()),
             ("search", search.into()),
         ];
         if let Some(system) = system {
             query.push(("system", system.into()));
         }
+        if !filters.is_empty() {
+            query.push(("filters", serde_json::to_string(filters)?));
+        }
         self.json("games", &query)
+    }
+
+    /// Locate an initial in the server's case-folded catalogue without downloading
+    /// every preceding page. Keep the current platform and search constraints.
+    pub fn games_at_letter(
+        &self,
+        system: Option<&str>,
+        search: &str,
+        letter: char,
+    ) -> Result<Option<(Page, usize)>> {
+        self.games_at_letter_filtered(system, search, letter, &BTreeMap::new())
+    }
+
+    pub fn games_at_letter_filtered(
+        &self,
+        system: Option<&str>,
+        search: &str,
+        letter: char,
+        filters: &BTreeMap<String, String>,
+    ) -> Result<Option<(Page, usize)>> {
+        // Use the same Unicode folding as the server's ORDER BY, not lowercase
+        // (e.g. long s, ſ, sorts under s on the server).
+        let mapper = icu_casemap::CaseMapper::new();
+        let target = mapper.fold_string(&letter.to_string()).into_owned();
+        let first = self.games_page(system, 0, search, 1, filters)?;
+        let (mut low, mut high) = (0, first.total);
+        while low < high {
+            let middle = low + (high - low) / 2;
+            let probe = self.games_page(system, middle, search, 1, filters)?;
+            if probe.total != first.total || probe.offset != middle {
+                bail!("Le catalogue a changé pendant le saut alphabétique ; réessayer");
+            }
+            let Some(game) = probe.items.first() else {
+                bail!("Le catalogue a changé pendant le saut alphabétique ; réessayer");
+            };
+            if mapper.fold_string(&game.name).as_ref() < target.as_str() {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        if low == first.total {
+            return Ok(None);
+        }
+        let offset = low / 50 * 50;
+        let page = self.games_filtered(system, offset, search, filters)?;
+        if page.total != first.total || page.offset != offset {
+            bail!("Le catalogue a changé pendant le saut alphabétique ; réessayer");
+        }
+        let index = low - offset;
+        Ok(page
+            .items
+            .get(index)
+            .is_some_and(|game| mapper.fold_string(&game.name).starts_with(&target))
+            .then_some((page, index)))
     }
 
     pub fn manifest(&self, id: &str) -> Result<Manifest> {
@@ -290,7 +375,7 @@ mod tests {
         let address = listener.local_addr().unwrap();
         let server = thread::spawn(move || {
             for body in [
-                r#"[{"id":"empty","name":"Empty","game_count":0},{"id":"nes","name":"NES","game_count":12}]"#,
+                r#"[{"id":"empty","name":"Empty","game_count":0},{"id":"psx","name":"AAA","game_count":2},{"id":"switch","name":"ZZZ","game_count":3},{"id":"nes","name":"NES","game_count":12},{"id":"custom","name":"alpha","game_count":1}]"#,
                 r#"[{"id":"nes","name":"NES","game_count":0}]"#,
                 r#"[{"id":"snes","name":"SNES","game_count":2}]"#,
             ] {
@@ -314,8 +399,13 @@ mod tests {
         });
         let api = Api::new(&format!("http://{address}")).unwrap();
         let systems = api.systems().unwrap();
-        assert_eq!(systems.len(), 1);
-        assert_eq!(systems[0].id, "nes");
+        assert_eq!(
+            systems
+                .iter()
+                .map(|system| system.id.as_str())
+                .collect::<Vec<_>>(),
+            ["custom", "nes", "switch", "psx"]
+        );
         assert!(api.systems().unwrap().is_empty());
         assert_eq!(api.systems().unwrap()[0].id, "snes");
         server.join().unwrap();
@@ -411,5 +501,76 @@ mod tests {
             );
         }
         server.join().unwrap();
+    }
+
+    #[test]
+    fn letter_jump_finds_first_match_beyond_loaded_pages_and_keeps_scope() {
+        for (letter, expected, offsets) in [
+            ('M', Some((50, 15)), vec![0, 65, 32, 49, 57, 61, 63, 64, 50]),
+            ('B', None, vec![0, 65, 32, 49, 57, 61, 63, 64, 50]),
+            (
+                'Z',
+                Some((100, 20)),
+                vec![0, 65, 98, 114, 122, 118, 120, 119, 100],
+            ),
+            ('0', None, vec![0, 65, 32, 16, 8, 4, 2, 1, 0, 0]),
+        ] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = thread::spawn(move || {
+                for (request, expected_offset) in offsets.iter().enumerate() {
+                    let (mut stream, _) = listener.accept().unwrap();
+                    stream
+                        .set_read_timeout(Some(Duration::from_secs(5)))
+                        .unwrap();
+                    let mut reader = BufReader::new(stream.try_clone().unwrap());
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    let path = line.split_whitespace().nth(1).unwrap();
+                    let url = reqwest::Url::parse(&format!("http://localhost{path}")).unwrap();
+                    let query: BTreeMap<_, _> = url
+                        .query_pairs()
+                        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+                        .collect();
+                    assert_eq!(query["system"], "nes");
+                    assert_eq!(query["search"], "demo & test");
+                    assert_eq!(
+                        serde_json::from_str::<serde_json::Value>(&query["filters"]).unwrap(),
+                        serde_json::json!({"year": ">=1990", "players": "2"})
+                    );
+                    let offset: usize = query["offset"].parse().unwrap();
+                    assert_eq!(offset, *expected_offset);
+                    let limit: usize = query["limit"].parse().unwrap();
+                    assert_eq!(limit, if request == offsets.len() - 1 { 50 } else { 1 });
+                    loop {
+                        line.clear();
+                        assert!(reader.read_line(&mut line).unwrap() > 0);
+                        if line == "\r\n" {
+                            break;
+                        }
+                    }
+                    let items: Vec<_> = (offset..(offset + limit).min(130)).map(|index| {
+                        let initial = if index < 65 { 'a' } else if index < 90 { 'M' } else if index < 120 { 'ſ' } else { 'z' };
+                        serde_json::json!({"id": index.to_string(), "name": format!("{initial}{index:03}"), "system": "nes", "path": "demo.nes", "metadata": {}, "files": [], "installable": true})
+                    }).collect();
+                    let body = serde_json::json!({"items": items, "offset": offset, "total": 130, "limit": limit}).to_string();
+                    write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+                }
+            });
+            let api = Api::new(&format!("http://{address}")).unwrap();
+            let found = api
+                .games_at_letter_filtered(
+                    Some("nes"),
+                    "demo & test",
+                    letter,
+                    &BTreeMap::from([
+                        ("year".into(), ">=1990".into()),
+                        ("players".into(), "2".into()),
+                    ]),
+                )
+                .unwrap();
+            assert_eq!(found.map(|(page, index)| (page.offset, index)), expected);
+            server.join().unwrap();
+        }
     }
 }

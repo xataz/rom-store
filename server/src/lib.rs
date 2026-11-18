@@ -3,6 +3,7 @@
 pub mod api;
 pub mod catalog;
 pub mod config;
+pub mod filters;
 pub mod identity;
 pub mod models;
 pub mod paths;

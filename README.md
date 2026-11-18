@@ -61,7 +61,7 @@ qu'une fois. Limites : 1 Mio et 240 références de disques par playlist.
 Un disque absent, un chemin absolu/URL ou sortant de la plateforme, une playlist
 vide/invalide, une playlist imbriquée ou un disque à dépendances (`.cue`, `.gdi`,
 `.ccd`, `.mds`) rend le jeu visible mais **non installable**, avec un diagnostic.
-Après ajout ou modification, recharger le catalogue avec **F5 / L1**.
+Après ajout ou modification, ouvrir **Start / Échap → Recharger le catalogue serveur**.
 
 ### Images des systèmes
 
@@ -390,23 +390,27 @@ Sans `--config`, le client utilise `http://127.0.0.1:8000`, `/userdata/roms` et 
 |---|---|---|
 | Naviguer | Croix ou stick gauche | Flèches |
 | Choisir / ouvrir la fiche / valider son action | Bouton principal, SDL A | Entrée |
-| Informations du jeu sélectionné | SDL Y (dans le catalogue) | I |
-| Basculer jaquettes / liste détaillée | Clic stick droit, SDL R3 | V |
 | Rechercher des jeux | Clic stick gauche, SDL L3 | F |
-| Recharger les ROMs du serveur | L1 (bouton d'épaule gauche SDL) | F5 |
-| Retour / quitter depuis les systèmes | Bouton secondaire, SDL B | Échap / Retour arrière |
-| Ouvrir / fermer la file | Menu ou SDL X | Tab |
-| Annuler la tâche sélectionnée | SDL Y | Suppr |
+| Aller directement à une lettre | R1 (bouton d'épaule droit SDL) | L |
+| Retour (ne quitte jamais l'application) | Bouton secondaire, SDL B | Retour arrière |
+| Ouvrir / fermer le menu | Start | Échap |
+| Annuler la tâche sélectionnée dans les téléchargements | SDL A | Entrée |
 
 La lettre physique des boutons varie selon la manette. Les périphériques doivent être reconnus par SDL comme GameController. Pour une manette non reconnue, fournir un mapping via `SDL_GAMECONTROLLERCONFIG`.
 
-L'interface adopte un thème bleu nuit avec accents menthe, cartes arrondies et sélection contrastée. Les plateformes et les jeux proposent chacun deux vues : **grille de visuels** ou **liste avec détails à droite**. Les champs YAML `games_view` et `systems_view` acceptent `grid` ou `list` et définissent indépendamment les vues initiales (respectivement `grid` et `list` par défaut). **V / R3** bascule la vue pendant la session, sans perdre la sélection ni réécrire la configuration. Les choix sont conservés pendant la navigation ; modifier le YAML pour les retrouver au prochain lancement. Le bandeau supérieur ne contient que **Plateformes** et **Téléchargements** ; les catalogues et fiches restent dans la section Plateformes.
+L'interface adopte un thème bleu nuit avec accents menthe, cartes arrondies et sélection contrastée. Les plateformes et les jeux proposent chacun deux vues : **grille de visuels** ou **liste avec détails à droite**. Les champs YAML `games_view` et `systems_view` acceptent `grid` ou `list` et définissent indépendamment les vues initiales (respectivement `grid` et `list` par défaut). Le menu **Start / Échap** permet de modifier séparément les deux vues avec **← → / A**, sans perdre la sélection ni réécrire la configuration. Ces choix durent pendant la session ; modifier le YAML pour les retrouver au prochain lancement.
+
+Le menu donne aussi un accès direct aux **téléchargements**, à la **recherche avancée**, au **rechargement du catalogue serveur** et à **Quitter**. Si `auto_refresh: true`, il propose également une **actualisation manuelle du frontend** avec la même commande locale que le refresh automatique. Cette action est refusée tant que des installations/désinstallations sont en attente ou en cours ; elle s'exécute en arrière-plan et ses erreurs sont affichées. **B / Retour arrière ne quitte jamais l'application**, même à l'accueil. Les anciens raccourcis V/R3, I/Y, F5/L1, Tab/X et Suppr sont retirés de la navigation principale.
+
+Pendant un téléchargement, un encart en haut à gauche affiche uniquement le nom en cours et sa position **n / total** parmi les téléchargements de la session. Il ne montre ni les tâches en attente ni les désinstallations et disparaît quand aucun téléchargement n'est actif. Le détail de la file reste accessible par le menu ; **A / Entrée** y annule la tâche sélectionnée.
+
+Les listes affichent les noms sans numérotation. Les plateformes sont triées sur leur nom mappé (par exemple **Nintendo Switch**, pas `switch`). **L / R1** ouvre un sélecteur alphabétique dans les deux vues : choisir une lettre ou un chiffre avec les directions puis **Entrée / A**, ou taper directement le caractère au clavier. **Retour arrière / B** annule. Le saut sélectionne le premier nom correspondant ; pour les ROMs, il couvre tout le catalogue, même les pages non chargées, et conserve la plateforme et les filtres en cours. Si aucun nom ne correspond, la sélection reste inchangée. Le défilement reste possible dans les deux sens après un saut.
 
 Le client masque les plateformes dont le compteur `game_count` est à zéro
 (compteur de jeux installables publié par le serveur), au démarrage comme après
 chaque actualisation. Le catalogue et les compteurs de la WebUI serveur ne changent pas.
 
-La grille comporte **5 colonnes** et deux lignes visibles, avec la jaquette et le nom dessous. Le jeu sélectionné est encadré ; haut/bas changent de ligne et gauche/droite de vignette. La liste se parcourt avec haut/bas et affiche à droite jaquette, capture, description, développeur et joueurs. Dans les deux vues, **A / Entrée ouvre toujours la fiche**, sans lancer d'installation ; **Y / I** reste un raccourci vers cette même fiche. Une nouvelle validation **depuis la fiche** lance l'installation si le jeu est absent, ou propose sa désinstallation s'il est déjà présent. Une opération en attente ou en cours ne peut pas être ajoutée en double ; l'installation des formats non pris en charge reste bloquée.
+La grille comporte **5 colonnes** et deux lignes visibles, avec la jaquette et le nom dessous. Le jeu sélectionné est encadré ; haut/bas changent de ligne et gauche/droite de vignette. La liste se parcourt avec haut/bas et affiche à droite jaquette, capture, description, développeur et joueurs. Dans les deux vues, **A / Entrée ouvre toujours la fiche**, sans lancer d'installation. Une nouvelle validation **depuis la fiche** lance l'installation si le jeu est absent, ou propose sa désinstallation s'il est déjà présent. Une opération en attente ou en cours ne peut pas être ajoutée en double ; l'installation des formats non pris en charge reste bloquée.
 
 Le catalogue utilise un **défilement infini**, sans pages à changer : à l'approche de la fin des jeux chargés, le client récupère automatiquement le lot suivant en arrière-plan. La sélection et les jeux déjà visibles restent accessibles pendant ce chargement. Le compteur indique la position dans le catalogue complet ; en cas d'erreur réseau, continuer à défiler relance le chargement. Les lots sont toujours limités à 50 jeux côté API, sans téléchargement intégral au démarrage. Seules les jaquettes proches de la sélection sont gardées en mémoire (20 maximum).
 
@@ -447,7 +451,7 @@ Ce fichier n'est pas un manifeste d'installation utilisable avec `--recover`.
 
 ### Recharger les ROMs disponibles
 
-Après un ajout, retrait ou changement de ROM, média ou `gamelist.xml`, **F5 / L1** depuis les plateformes ou un catalogue demande une réindexation complète au serveur. Un message indique le travail en cours ; la navigation reste accessible. À la fin, les plateformes et le catalogue sont actualisés automatiquement, ainsi que les indicateurs de ROMs installées. La recherche et sa portée sont conservées ; le catalogue repart de son début pour éviter de mélanger les anciens et nouveaux lots. Si la plateforme a disparu, le client revient aux plateformes. Les fichiers installés localement et les tâches de téléchargement ne sont pas supprimés.
+Après un ajout, retrait ou changement de ROM, média ou `gamelist.xml`, **Start / Échap → Recharger le catalogue serveur** demande une réindexation complète au serveur. Un message indique le travail en cours ; la navigation reste accessible. À la fin, les plateformes et le catalogue sont actualisés automatiquement, ainsi que les indicateurs de ROMs installées. La recherche, les critères avancés et leur portée sont conservés ; le catalogue repart de son début pour éviter de mélanger les anciens et nouveaux lots. Si la plateforme a disparu, le client revient aux plateformes. Les fichiers installés localement et les tâches de téléchargement ne sont pas supprimés.
 
 La lecture du catalogue reste disponible pendant l'analyse et sa publication dans SQLite est atomique. Les demandes simultanées rejoignent le rechargement déjà en cours dans le processus serveur, sans lancer plusieurs analyses. Les empreintes des fichiers inchangés sont réutilisées. Les fichiers sources ne sont jamais modifiés. Les ROMs doivent toujours être référencées dans les `gamelist.xml` : ce rechargement ne crée pas d'entrées pour les fichiers non référencés.
 
@@ -458,7 +462,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/catalog/reload
 curl http://127.0.0.1:8000/api/v1/catalog/reload
 ```
 
-Le POST répond immédiatement avec HTTP **202**. Le GET retourne `idle`, `running`, `completed` ou `failed`, avec le nombre de plateformes, jeux et diagnostics à la fin. Les détails d'exception restent dans les journaux du serveur. Le client interroge cet état toutes les 500 ms, avec une limite d'attente d'une heure ; arrêter le client n'annule pas l'analyse côté serveur. Un échec est affiché et une nouvelle pression sur F5 / L1 permet de réessayer.
+Le POST répond immédiatement avec HTTP **202**. Le GET retourne `idle`, `running`, `completed` ou `failed`, avec le nombre de plateformes, jeux et diagnostics à la fin. Les détails d'exception restent dans les journaux du serveur. Le client SDL interroge cet état toutes les 3 secondes ; arrêter le client n'annule pas l'analyse côté serveur. Un échec est affiché et la même action du menu permet de réessayer.
 
 Pour une réindexation locale en ligne de commande, l'outil existant reste disponible (utiliser les mêmes chemins que le serveur) :
 
@@ -470,11 +474,19 @@ Ces commandes ne nécessitent pas de redémarrage du serveur. Comme les autres r
 
 ### Recherche globale ou par plateforme
 
-**F / L3** ouvre la recherche : depuis l'accueil, elle porte sur toutes les plateformes ; depuis un catalogue, elle est limitée par défaut à cette plateforme. **Tab / Y**, dans la fenêtre de recherche, bascule entre cette plateforme et toutes les plateformes. Les résultats globaux indiquent le système de chaque jeu.
+**F / L3** ouvre la recherche : depuis l'accueil, elle porte sur toutes les plateformes ; depuis un catalogue, elle est limitée par défaut à cette plateforme. La touche **Plateforme** du clavier à l'écran bascule entre cette plateforme et toutes les plateformes. Le panneau de détail des résultats globaux indique le système de chaque jeu.
 
-Au clavier, saisir le nom puis valider avec **Entrée**. À la manette, déplacer la sélection sur le clavier à l'écran avec le stick ou la croix, **A** ajoute un caractère, **X** efface le dernier et **Start** lance la recherche (ou choisir la touche **OK**). **B / Échap** ferme la saisie sans changer les résultats. **Suppr** ou la touche d'effacement du clavier virtuel vide le texte. Valider un texte vide retire le filtre de nom tout en gardant la portée choisie.
+Au clavier, saisir le nom puis valider avec **Entrée**. À la manette, déplacer la sélection sur le clavier à l'écran avec le stick ou la croix ; **A** active la touche choisie (caractère, effacement ou **OK**). **B** ferme la saisie sans changer les résultats. **Échap / Start** ouvre le menu sans soumettre la saisie. Dans un champ de texte, Retour arrière efface le dernier caractère et Suppr vide la saisie. Valider un texte vide retire le filtre de nom tout en gardant la portée et les autres critères.
 
 La recherche porte sur les noms des jeux, sans distinction de casse, et accepte les accents et caractères spéciaux saisis au clavier (256 caractères maximum). Elle n'est envoyée au serveur qu'à la validation. Le filtre et sa portée sont conservés pendant le défilement infini, les changements de vue et l'aller-retour sur une fiche ; les résultats suivants se chargent progressivement comme dans le catalogue.
+
+### Recherche avancée
+
+**Start / Échap → Recherche avancée** ouvre un formulaire pilotable à la manette : plateforme avec **← →**, valeur d'un champ avec **A** puis le clavier virtuel ou physique. Le formulaire propose nom, année, joueurs, genre, développeur, éditeur et note, puis découvre les autres métadonnées indexées : région, langue, description, champs personnalisés, références de médias, etc. Les champs locaux volontairement exclus par l'indexeur (`favorite`, `hidden`, compteurs de jeu…) ne sont pas importés et ne figurent pas dans ces filtres.
+
+Les critères non vides se combinent avec **ET**. Par défaut, le texte est recherché littéralement sans distinction de casse ; `=valeur` exige une égalité et `>=nombre`, `<=nombre`, `>nombre`, `<nombre` comparent les nombres. **Année** utilise les quatre premiers caractères de `releasedate`. **Joueurs : 2** accepte aussi `1-4` ou `2+`. La note conserve l'échelle du gamelist, généralement 0–1. Choisir **Appliquer les filtres** en bas du formulaire ; **Effacer tous les filtres** prépare une recherche sans critères. **B** annule sans modifier les résultats.
+
+Le filtrage est effectué sur l'ensemble du catalogue serveur avant comptage et pagination. Les critères restent actifs lors du saut alphabétique, du défilement et du rechargement. **Cette recherche nécessite de mettre à jour le serveur et le client** : `GET /api/v1/games/fields` expose les champs, et `GET /api/v1/games?filters={...}` accepte un objet JSON champ/critère (32 critères maximum, 256 caractères par valeur). L'API existante reste compatible lorsque `filters` est absent.
 
 ### Jaquettes et mix-images
 
@@ -602,7 +614,7 @@ SDL_VIDEODRIVER=dummy client/target/debug/romstore-client \
   --smoke-test --screenshots .romstore/screenshots
 ```
 
-Le test SDL couvre 26 scènes : grilles avec jaquettes de différentes proportions, listes, défilement, fiche avec mix-image unique, médias manquants, file vide, téléchargements, erreur, chargement, clavier de recherche global/local, résultats multi-plateformes, recherche sans résultat, chargement progressif, indicateurs de jeux installés, réindexation en cours, fiche de désinstallation et confirmations annuler/supprimer. Les captures PNG sont facultatives et écrites uniquement avec `--screenshots`. Ce test couvre l'initialisation et le rendu, pas l'ergonomie ou une manette physique. Les tests de bout en bout couvrent téléchargement, médias, XML, réinstallation, conflits et récupération ; les tests Rust de désinstallation couvrent la suppression locale, les chemins, références partagées, sauvegardes XML et échecs de publication/restauration.
+Le test SDL couvre 34 scènes : grilles avec jaquettes de différentes proportions, listes, défilement, fiche avec mix-image unique, médias manquants, file vide, téléchargements, erreur, chargement, clavier de recherche global/local, résultats multi-plateformes, recherche sans résultat, chargement progressif, indicateurs de jeux installés, réindexation en cours, fiche de désinstallation, confirmations annuler/supprimer, sélecteur alphabétique plateformes/jeux, menu, refresh conditionnel, formulaire et clavier de recherche avancée, filtres actifs et notification de téléchargement. Les captures PNG sont facultatives et écrites uniquement avec `--screenshots`. Ce test couvre l'initialisation et le rendu, pas l'ergonomie ou une manette physique. Les tests de bout en bout couvrent téléchargement, médias, XML, réinstallation, conflits et récupération ; les tests Rust de désinstallation couvrent la suppression locale, les chemins, références partagées, sauvegardes XML et échecs de publication/restauration.
 
 ## Limites de cette version
 

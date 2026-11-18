@@ -9,6 +9,7 @@ anyhow = "1"
 fontdue = "0.9"
 fs2 = "0.4"
 hex = "0.4"
+icu_casemap = "2.4"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "pnm", "webp"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 sdl2 = "0.38"

@@ -1,4 +1,38 @@
 tagline: DEIN NÄCHSTES ABENTEUER WARTET
+menu_title: Menü
+menu_shortcut: Start / Esc · Menü
+menu_systems_view: Konsolenansicht
+menu_games_view: ROM-Ansicht
+menu_reload: Serverkatalog neu laden
+menu_refresh: Frontend-Spiele aktualisieren
+menu_controls: "↑ ↓: wählen · ← → / A: ändern · A: öffnen · B / Rücktaste: schließen"
+back_key: Rücktaste / B
+download_notification: "Download {0} / {1}"
+refresh_running: Frontend wird aktualisiert…
+refresh_complete: Spieleaktualisierung beim Frontend angefordert.
+refresh_busy: Vor der Aktualisierung auf das Ende lokaler Vorgänge warten.
+refresh_failed: "Frontend-Aktualisierung fehlgeschlagen: {0}"
+advanced_title: Erweiterte Suche
+advanced_no_results: Kein Spiel entspricht den Filtern.
+advanced_help: "Teiltext · =exakt · >=Minimum · <=Maximum · Kombinierte Kriterien"
+advanced_loading: gamelist.xml-Felder werden geladen…
+advanced_fields_failed: "Erweiterte Suche nicht verfügbar: {0} (Serverversion prüfen)"
+advanced_controls: "↑ ↓: Feld · A: bearbeiten · ← →: Plattform · B / Rücktaste: abbrechen"
+advanced_apply: Filter anwenden
+advanced_clear: Alle Filter löschen
+advanced_active: "ERWEITERTE SUCHE · {0} FILTER"
+filter_platform: Plattform
+filter_name: Name
+filter_year: Jahr
+filter_genre: Genre
+filter_publisher: Herausgeber
+filter_rating: Bewertung (0–1)
+filter_any: Beliebig
+filter_value: Filterwert
+alphabet_jump: Buchstabe
+alphabet_title: Direkt zu einem Buchstaben springen
+alphabet_controls: "↑ ↓ ← →: wählen · Enter / A: bestätigen · Rücktaste / B: abbrechen · Tastatur: Buchstabe"
+alphabet_missing: "Kein Name beginnt mit {0}."
 nav_platforms: 01  Plattformen
 nav_transfers: 02  Downloads
 active_transfers: "{0} wartend / aktiv"
@@ -110,7 +144,7 @@ uninstall_job: "Deinstallieren: {0}"
 uninstall_preserved: Nur lokale ROM + XML-Eintrag · Medien und Spielstände bleiben erhalten.
 uninstall_confirm_title: Dieses Spiel deinstallieren?
 uninstall_confirm_body: Die ROM wird aus dem ROM-Ordner dieses Clients gelöscht und ihr gamelist.xml-Eintrag entfernt. Medien und Spielstände bleiben erhalten.
-uninstall_confirm_controls: "← →: wählen · A / Eingabe: bestätigen · B / Esc: abbrechen"
+uninstall_confirm_controls: "← →: wählen · A / Eingabe: bestätigen · B / Rücktaste: abbrechen"
 operation_pending: Vorgang bereits vorgemerkt / aktiv
 screenshot: BILDSCHIRMFOTO
 screenshot_missing: KEIN BILDSCHIRMFOTO
@@ -121,8 +155,8 @@ all_platforms: Alle Plattformen
 search_platform: "Plattform: {0}"
 space_key: Leer
 clear_search: Löschen
-search_keyboard_hint: "Tippen oder A: Zeichen · X: löschen · Start/Eingabe: suchen · B/Esc: schließen"
-search_scope_hint: "Tab / Y: diese oder alle Plattformen · Entf: Eingabe leeren"
+search_keyboard_hint: "Tastatur oder A: Zeichen · OK / Enter: bestätigen · B: schließen · Start / Esc: Menü"
+search_scope_hint: "Plattform-Taste: diese oder alle · ←: löschen · Löschen: Eingabe leeren"
 search_global_hint: "Suche auf allen Plattformen · Entf: Eingabe leeren"
 search_results: "SUCHE: {0}"
 search_no_results: "Keine Spiele für „{0}“."

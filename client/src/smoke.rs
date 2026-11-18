@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub const SCENES: usize = 26;
+pub const SCENES: usize = 34;
 
 fn media(id: char, role: &str) -> File {
     File {
@@ -107,6 +107,10 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
     app.loading = false;
     app.reloading = false;
     app.uninstall_confirmation = None;
+    app.alphabet = None;
+    app.menu = None;
+    app.advanced = None;
+    app.frontend_refreshing = false;
     match frame {
         0 => {
             app.catalog_system = Some("nes".into());
@@ -374,6 +378,62 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
             });
             app.status = l.text("uninstalled_hint").into();
         }
+        26 | 27 => {
+            app.screen = if frame == 26 {
+                Screen::Systems
+            } else {
+                Screen::Games
+            };
+            app.alphabet = Some(crate::alphabet::AlphabetDialog::new("Nintendo Switch"));
+        }
+        28 | 29 => {
+            app.screen = Screen::Games;
+            app.config.auto_refresh = frame == 29;
+            app.frontend_refreshing = frame == 29;
+            app.menu = Some(crate::menu::Menu {
+                selected: if frame == 28 { 0 } else { 5 },
+            });
+        }
+        30 | 31 => {
+            let mut dialog = crate::advanced::AdvancedDialog::new(
+                &app.systems,
+                Some("nes".into()),
+                "voyageurs",
+                &Default::default(),
+            );
+            dialog.set_fields(vec!["region".into(), "lang".into(), "custom".into()]);
+            dialog.values.insert("year".into(), ">=1990".into());
+            dialog.values.insert("players".into(), "2".into());
+            dialog.selected = 2;
+            if frame == 31 {
+                dialog.action(crate::input::Action::Confirm);
+            }
+            app.advanced = Some(dialog);
+        }
+        32 => {
+            for job in &mut app.jobs {
+                job.done = true;
+            }
+            app.jobs.push(Job {
+                kind: JobKind::Install,
+                game_id: "8".repeat(64),
+                name: "Les voyageurs de l'aube".into(),
+                cancel: Arc::new(AtomicBool::new(false)),
+                state: l.text("in_progress").into(),
+                done: false,
+                succeeded: false,
+                started: Some(Instant::now()),
+                progress: None,
+            });
+        }
+        33 => {
+            for job in &mut app.jobs {
+                job.done = true;
+            }
+            app.filters.insert("year".into(), ">=1990".into());
+            app.filters.insert("players".into(), "2".into());
+            app.status = l.text("navigation_hint").into();
+        }
         _ => unreachable!(),
     }
     Ok([
@@ -403,5 +463,13 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
         "uninstall-confirm-cancel",
         "uninstall-confirm-remove",
         "uninstall-completed",
+        "platforms-alphabet",
+        "games-alphabet",
+        "menu",
+        "menu-frontend-refresh",
+        "advanced-search",
+        "advanced-search-keyboard",
+        "download-notification",
+        "advanced-search-results",
     ][frame])
 }

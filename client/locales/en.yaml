@@ -1,4 +1,38 @@
 tagline: YOUR NEXT ADVENTURE STARTS HERE
+menu_title: Menu
+menu_shortcut: Start / Esc · Menu
+menu_systems_view: Console view
+menu_games_view: ROM view
+menu_reload: Reload server catalogue
+menu_refresh: Refresh frontend games
+menu_controls: "↑ ↓: choose · ← → / A: change · A: open · B / Backspace: close"
+back_key: Backspace / B
+download_notification: "Download {0} / {1}"
+refresh_running: Refreshing frontend…
+refresh_complete: Game refresh requested from the frontend.
+refresh_busy: Wait for local operations to finish before refreshing games.
+refresh_failed: "Frontend refresh failed: {0}"
+advanced_title: Advanced search
+advanced_no_results: No game matches the filters.
+advanced_help: "Partial text · =exact · >=minimum · <=maximum · Combined criteria"
+advanced_loading: Loading gamelist.xml fields…
+advanced_fields_failed: "Advanced search unavailable: {0} (check the server version)"
+advanced_controls: "↑ ↓: field · A: edit · ← →: platform · B / Backspace: cancel"
+advanced_apply: Apply filters
+advanced_clear: Clear all filters
+advanced_active: "ADVANCED SEARCH · {0} FILTERS"
+filter_platform: Platform
+filter_name: Name
+filter_year: Year
+filter_genre: Genre
+filter_publisher: Publisher
+filter_rating: Rating (0–1)
+filter_any: Any
+filter_value: Filter value
+alphabet_jump: Letter
+alphabet_title: Jump to a letter
+alphabet_controls: "↑ ↓ ← →: choose · Enter / A: confirm · Backspace / B: cancel · Keyboard: type a letter"
+alphabet_missing: "No name starts with {0}."
 nav_platforms: 01  Platforms
 nav_transfers: 02  Downloads
 active_transfers: "{0} queued / active"
@@ -110,7 +144,7 @@ uninstall_job: "Uninstall: {0}"
 uninstall_preserved: Local ROM + XML entry only · artwork and saved games retained.
 uninstall_confirm_title: Uninstall this game?
 uninstall_confirm_body: The ROM will be deleted from this client's ROMs folder and its gamelist.xml entry removed. Artwork and saved games will be kept.
-uninstall_confirm_controls: "← →: choose · A / Enter: confirm · B / Esc: cancel"
+uninstall_confirm_controls: "← →: choose · A / Enter: confirm · B / Backspace: cancel"
 operation_pending: Operation already queued / in progress
 screenshot: SCREENSHOT
 screenshot_missing: NO SCREENSHOT
@@ -121,8 +155,8 @@ all_platforms: All platforms
 search_platform: "Platform: {0}"
 space_key: Space
 clear_search: Clear
-search_keyboard_hint: "Type or A: character · X: erase · Start/Enter: search · B/Esc: close"
-search_scope_hint: "Tab / Y: this platform or all platforms · Delete: clear text"
+search_keyboard_hint: "Type or A: character · OK / Enter: confirm · B: close · Start / Esc: menu"
+search_scope_hint: "Platform key: this platform or all · ←: erase · Clear: reset text"
 search_global_hint: "Search across all platforms · Delete: clear text"
 search_results: "SEARCH: {0}"
 search_no_results: "No games matching “{0}”."

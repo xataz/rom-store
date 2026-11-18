@@ -16,15 +16,37 @@ pub enum Action {
     Left,
     Right,
     Confirm,
-    Info,
-    Secondary,
-    ToggleView,
     Search,
-    Reload,
+    Alphabet,
+    Menu,
     Back,
-    Queue,
-    Cancel,
     Quit,
+}
+
+fn button_action(button: Button) -> Option<Action> {
+    match button {
+        Button::A => Some(Action::Confirm),
+        Button::B => Some(Action::Back),
+        Button::Start => Some(Action::Menu),
+        Button::LeftStick => Some(Action::Search),
+        Button::RightShoulder => Some(Action::Alphabet),
+        _ => None,
+    }
+}
+
+fn key_action(key: Keycode, repeat: bool) -> Option<Action> {
+    match key {
+        Keycode::Up => Some(Action::Up),
+        Keycode::Down => Some(Action::Down),
+        Keycode::Left => Some(Action::Left),
+        Keycode::Right => Some(Action::Right),
+        Keycode::Return if !repeat => Some(Action::Confirm),
+        Keycode::F if !repeat => Some(Action::Search),
+        Keycode::L if !repeat => Some(Action::Alphabet),
+        Keycode::Escape if !repeat => Some(Action::Menu),
+        Keycode::Backspace if !repeat => Some(Action::Back),
+        _ => None,
+    }
 }
 
 pub struct Input {
@@ -69,35 +91,12 @@ impl Input {
                 self.held = None;
                 None
             }
-            Event::ControllerButtonDown { button, .. } => match button {
-                Button::A => Some(Action::Confirm),
-                Button::B => Some(Action::Back),
-                Button::Start | Button::X => Some(Action::Queue),
-                Button::Y => Some(Action::Secondary),
-                Button::RightStick => Some(Action::ToggleView),
-                Button::LeftStick => Some(Action::Search),
-                Button::LeftShoulder => Some(Action::Reload),
-                _ => None,
-            },
+            Event::ControllerButtonDown { button, .. } => button_action(button),
             Event::KeyDown {
                 keycode: Some(key),
                 repeat,
                 ..
-            } => match key {
-                Keycode::Up => Some(Action::Up),
-                Keycode::Down => Some(Action::Down),
-                Keycode::Left => Some(Action::Left),
-                Keycode::Right => Some(Action::Right),
-                Keycode::Return if !repeat => Some(Action::Confirm),
-                Keycode::I if !repeat => Some(Action::Info),
-                Keycode::V if !repeat => Some(Action::ToggleView),
-                Keycode::F if !repeat => Some(Action::Search),
-                Keycode::F5 if !repeat => Some(Action::Reload),
-                Keycode::Escape | Keycode::Backspace if !repeat => Some(Action::Back),
-                Keycode::Tab if !repeat => Some(Action::Queue),
-                Keycode::Delete if !repeat => Some(Action::Cancel),
-                _ => None,
-            },
+            } => key_action(key, repeat),
             _ => None,
         }
     }
@@ -134,6 +133,33 @@ impl Input {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn only_core_buttons_and_menu_have_direct_bindings() {
+        assert_eq!(key_action(Keycode::Escape, false), Some(Action::Menu));
+        assert_eq!(button_action(Button::Start), Some(Action::Menu));
+        assert_eq!(key_action(Keycode::Backspace, false), Some(Action::Back));
+        assert_eq!(button_action(Button::B), Some(Action::Back));
+        for key in [
+            Keycode::I,
+            Keycode::V,
+            Keycode::F5,
+            Keycode::Tab,
+            Keycode::Delete,
+        ] {
+            assert_eq!(key_action(key, false), None);
+        }
+        for button in [
+            Button::X,
+            Button::Y,
+            Button::RightStick,
+            Button::LeftShoulder,
+        ] {
+            assert_eq!(button_action(button), None);
+        }
+        assert_eq!(key_action(Keycode::Escape, true), None);
+    }
     #[test]
     fn unknown_sdl_events_do_not_panic() {
         // Events observed with Fedora's SDL runtime must be safely ignored,

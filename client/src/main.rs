@@ -1,15 +1,20 @@
+mod advanced;
+mod alphabet;
 mod artwork;
 mod fonts;
 mod input;
+mod menu;
 mod search;
 mod smoke;
 mod ui;
 mod views;
 
+use alphabet::{AlphabetDialog, Outcome as AlphabetOutcome};
 use anyhow::{anyhow, bail, Context, Result};
 use artwork::{ArtRequest, ArtTarget, ArtworkLoader};
 use image::RgbaImage;
 use input::{Action, Input};
+use menu::{Item as MenuItem, Menu};
 use romstore_client::{
     api::{Api, File, Game, Page, ReloadStatus, System},
     config::{Config, ViewMode},
@@ -23,7 +28,7 @@ use search::{SearchDialog, SearchOutcome};
 use sha2::{Digest, Sha256};
 use std::{
     cell::RefCell,
-    collections::{HashSet, VecDeque},
+    collections::{BTreeMap, HashSet, VecDeque},
     fs,
     io::{Cursor, Read, Write},
     path::PathBuf,
@@ -42,6 +47,9 @@ enum Message {
     Reloaded(Result<(ReloadStatus, Vec<System>)>),
     Systems(u64, Result<Vec<System>>),
     Games(u64, usize, Result<Page>),
+    Letter(u64, char, Result<Option<(Page, usize)>>),
+    FilterFields(u64, Result<Vec<String>>),
+    FrontendRefreshed(Result<()>),
     Art(u64, Result<RgbaImage>),
     Preview(u64, String, Result<RgbaImage>),
     Marquee(u64, String, Result<RgbaImage>),
@@ -189,6 +197,12 @@ struct App {
     catalog_system: Option<String>,
     search_query: String,
     search: Option<SearchDialog>,
+    alphabet: Option<AlphabetDialog>,
+    menu: Option<Menu>,
+    advanced: Option<advanced::AdvancedDialog>,
+    advanced_generation: u64,
+    filters: BTreeMap<String, String>,
+    frontend_refreshing: bool,
     uninstall_confirmation: Option<UninstallConfirmation>,
 }
 
@@ -282,6 +296,9 @@ impl App {
         self.preview_requests.replace(VecDeque::new());
         self.detail = None;
         self.uninstall_confirmation = None;
+        self.alphabet = None;
+        self.advanced = None;
+        self.advanced_generation += 1;
         let screen = if self.screen == Screen::Queue {
             &mut self.before_queue
         } else {
@@ -440,9 +457,10 @@ impl App {
             self.search_query.clone(),
         );
         let config = self.config.clone();
+        let filters = self.filters.clone();
         thread::spawn(move || {
             let result = api
-                .games(system.as_deref(), offset, &query)
+                .games_filtered(system.as_deref(), offset, &query, &filters)
                 .map(|mut page| {
                     for game in &mut page.items {
                         game.installed = config.rom_exists(&game.system, &game.path);
@@ -459,8 +477,12 @@ impl App {
         }
         if let Some(page) = &self.page {
             let loaded = page.items.len();
-            if loaded < page.total && self.game_index.saturating_add(20) >= loaded {
-                self.fetch_games(loaded);
+            if page.offset > 0 && self.game_index < 10 {
+                self.fetch_games(page.offset.saturating_sub(50));
+            } else if page.offset + loaded < page.total
+                && self.game_index.saturating_add(20) >= loaded
+            {
+                self.fetch_games(page.offset + loaded);
             }
         }
     }
@@ -487,14 +509,22 @@ impl App {
                 if batch.items.is_empty() {
                     batch.total = offset;
                 }
-                if offset == 0 {
+                if self.page.is_none() {
                     self.page = Some(batch);
                 } else if let Some(page) = &mut self.page {
-                    if page.items.len() != offset {
+                    if offset < page.offset && offset + batch.items.len() >= page.offset {
+                        batch.items.truncate(page.offset - offset);
+                        self.game_index += batch.items.len();
+                        batch.items.append(&mut page.items);
+                        page.items = batch.items;
+                        page.offset = offset;
+                        page.total = batch.total;
+                    } else if page.offset + page.items.len() == offset {
+                        page.total = batch.total;
+                        page.items.extend(batch.items);
+                    } else {
                         return false;
                     }
-                    page.total = batch.total;
-                    page.items.extend(batch.items);
                 }
                 self.status = self.config.language.text("navigation_hint").into();
                 true
@@ -640,6 +670,10 @@ impl App {
     }
 
     fn enqueue_job(&mut self, game: Game, kind: JobKind) -> Result<()> {
+        if self.frontend_refreshing {
+            self.status = self.config.language.text("refresh_running").into();
+            return Ok(());
+        }
         if self.jobs.iter().any(|j| j.game_id == game.id && !j.done) {
             self.status = self.config.language.text("already_queued").into();
             return Ok(());
@@ -671,6 +705,31 @@ impl App {
     }
 
     fn action(&mut self, action: Action) -> Result<bool> {
+        if self.quit_requested {
+            return Ok(self.frontend_refreshing || self.jobs.iter().any(|job| !job.done));
+        }
+        if action == Action::Menu {
+            if self.menu.is_some() {
+                self.menu = None;
+            } else {
+                self.search = None;
+                self.alphabet = None;
+                self.advanced = None;
+                self.uninstall_confirmation = None;
+                self.menu = Some(Menu::default());
+            }
+            return Ok(true);
+        }
+        if self.menu.is_some() && action != Action::Quit {
+            return self.menu_action(action);
+        }
+        if let Some(dialog) = &mut self.advanced {
+            if action != Action::Quit {
+                let outcome = dialog.action(action);
+                self.advanced_outcome(outcome);
+                return Ok(true);
+            }
+        }
         if self.uninstall_confirmation.is_some() && action != Action::Quit {
             match action {
                 Action::Left | Action::Up => {
@@ -679,9 +738,7 @@ impl App {
                 Action::Right | Action::Down => {
                     self.uninstall_confirmation.as_mut().unwrap().confirmed = true
                 }
-                Action::Back | Action::Cancel | Action::Secondary | Action::Info => {
-                    self.uninstall_confirmation = None
-                }
+                Action::Back => self.uninstall_confirmation = None,
                 Action::Confirm => {
                     let confirmation = self.uninstall_confirmation.take().unwrap();
                     if confirmation.confirmed {
@@ -697,22 +754,18 @@ impl App {
             self.search_outcome(outcome);
             return Ok(true);
         }
-        let action = if action == Action::Secondary {
-            if self.screen == Screen::Queue {
-                Action::Cancel
-            } else {
-                Action::Info
-            }
-        } else {
-            action
-        };
-        if self.quit_requested {
-            return Ok(self.jobs.iter().any(|job| !job.done));
+        if self.alphabet.is_some() && action != Action::Quit {
+            let outcome = self.alphabet.as_mut().unwrap().action(action);
+            self.alphabet_outcome(outcome);
+            return Ok(true);
         }
-        if action == Action::Quit || (action == Action::Back && self.screen == Screen::Systems) {
+        if action == Action::Quit {
             self.search = None;
+            self.alphabet = None;
+            self.menu = None;
+            self.advanced = None;
             self.uninstall_confirmation = None;
-            if self.jobs.iter().all(|job| job.done) {
+            if self.jobs.iter().all(|job| job.done) && !self.frontend_refreshing {
                 return Ok(false);
             }
             self.quit_requested = true;
@@ -724,19 +777,20 @@ impl App {
             return Ok(true);
         }
         match action {
-            Action::Reload if matches!(self.screen, Screen::Systems | Screen::Games) => {
-                self.reload_catalog()
+            Action::Alphabet
+                if matches!(self.screen, Screen::Systems | Screen::Games) && !self.loading =>
+            {
+                let name = if self.screen == Screen::Systems {
+                    self.systems
+                        .get(self.system_index)
+                        .map(System::display_name)
+                } else {
+                    self.selected_game().map(|game| game.name.as_str())
+                };
+                self.alphabet = Some(AlphabetDialog::new(name.unwrap_or("A")));
             }
             Action::Search if matches!(self.screen, Screen::Systems | Screen::Games) => {
                 self.open_search()
-            }
-            Action::Queue => {
-                if self.screen == Screen::Queue {
-                    self.screen = self.before_queue;
-                } else {
-                    self.before_queue = self.screen;
-                    self.screen = Screen::Queue;
-                }
             }
             Action::Back => match self.screen {
                 Screen::Queue => self.screen = self.before_queue,
@@ -750,6 +804,7 @@ impl App {
                     self.catalog_pending = None;
                     self.screen = Screen::Systems;
                     self.search_query.clear();
+                    self.filters.clear();
                     self.catalog_system = None;
                     self.gallery_cancel.store(true, Ordering::Relaxed);
                     self.gallery_generation += 1;
@@ -757,14 +812,6 @@ impl App {
                 }
                 Screen::Systems => (),
             },
-            Action::Cancel if self.screen == Screen::Queue => {
-                if let Some(job) = self.jobs.get_mut(self.queue_index) {
-                    if !job.done {
-                        job.cancel.store(true, Ordering::Relaxed);
-                        job.state = self.config.language.text("cancel_requested").into();
-                    }
-                }
-            }
             Action::Up | Action::Down | Action::Left | Action::Right
                 if matches!(self.screen, Screen::Systems | Screen::Games) && !self.loading =>
             {
@@ -816,6 +863,7 @@ impl App {
                             .get(self.system_index)
                             .map(|system| system.id.clone());
                         self.search_query.clear();
+                        self.filters.clear();
                         self.screen = Screen::Games;
                         self.page = None;
                         self.game_index = 0;
@@ -825,6 +873,12 @@ impl App {
                     }
                 }
                 Screen::Games if !self.loading => self.open_detail(),
+                Screen::Queue => {
+                    if let Some(job) = self.jobs.get_mut(self.queue_index).filter(|job| !job.done) {
+                        job.cancel.store(true, Ordering::Relaxed);
+                        job.state = self.config.language.text("cancel_requested").into();
+                    }
+                }
                 Screen::Detail => {
                     if let Some(game) = self.detail.as_ref().filter(|game| game.installed).cloned()
                     {
@@ -846,19 +900,6 @@ impl App {
                 }
                 _ => (),
             },
-            Action::Info if self.screen == Screen::Games && !self.loading => self.open_detail(),
-            Action::ToggleView
-                if matches!(self.screen, Screen::Games | Screen::Systems) && !self.loading =>
-            {
-                if self.screen == Screen::Games {
-                    self.config.games_view = self.config.games_view.toggled();
-                    self.load_thumbnails();
-                } else {
-                    self.config.systems_view = self.config.systems_view.toggled();
-                    self.load_system_thumbnails();
-                }
-                self.load_preview();
-            }
             _ => (),
         }
         Ok(true)
@@ -866,6 +907,31 @@ impl App {
 
     fn message(&mut self, message: Message, painter: &mut Painter) -> Result<()> {
         match message {
+            Message::FrontendRefreshed(result) => {
+                self.frontend_refreshing = false;
+                self.status = match result {
+                    Ok(()) => self.config.language.text("refresh_complete").into(),
+                    Err(error) => self
+                        .config
+                        .language
+                        .format("refresh_failed", &[&format!("{error:#}")]),
+                };
+            }
+            Message::FilterFields(generation, result) if generation == self.advanced_generation => {
+                if let Some(dialog) = &mut self.advanced {
+                    match result {
+                        Ok(fields) => dialog.set_fields(fields),
+                        Err(error) => {
+                            dialog.loading = false;
+                            dialog.error = Some(
+                                self.config
+                                    .language
+                                    .format("advanced_fields_failed", &[&format!("{error:#}")]),
+                            );
+                        }
+                    }
+                }
+            }
             Message::ReloadStarted(Err(error)) => self.finish_reload(Err(error)),
             Message::ReloadStarted(Ok(state)) => self.receive_reload_status(Ok(state)),
             Message::ReloadState(result) => self.receive_reload_status(result),
@@ -901,6 +967,38 @@ impl App {
                     self.load_thumbnails();
                     if offset == 0 {
                         self.load_preview();
+                    }
+                }
+            }
+            Message::Letter(generation, letter, result)
+                if generation == self.catalog_generation =>
+            {
+                self.loading = false;
+                match result {
+                    Ok(Some((mut page, index))) => {
+                        for game in &mut page.items {
+                            if self
+                                .jobs
+                                .iter()
+                                .any(|job| job.game_id == game.id && job.done)
+                            {
+                                game.installed = self.config.rom_exists(&game.system, &game.path);
+                            }
+                        }
+                        self.page = Some(page);
+                        self.game_index = index;
+                        self.load_thumbnails();
+                        self.load_preview();
+                        self.status = self.config.language.text("navigation_hint").into();
+                    }
+                    Ok(None) => {
+                        self.status = self.config.language.format("alphabet_missing", &[&letter])
+                    }
+                    Err(error) => {
+                        self.status = self
+                            .config
+                            .language
+                            .format("retry_back", &[&format!("{error:#}")])
                     }
                 }
             }
@@ -1014,11 +1112,184 @@ impl App {
         ));
     }
 
+    fn menu_action(&mut self, action: Action) -> Result<bool> {
+        let items = Menu::items(self.config.auto_refresh);
+        let menu = self.menu.as_mut().unwrap();
+        match action {
+            Action::Up => menu.selected = menu.selected.saturating_sub(1),
+            Action::Down => menu.selected = (menu.selected + 1).min(items.len() - 1),
+            Action::Back => self.menu = None,
+            Action::Confirm | Action::Left | Action::Right => {
+                let item = items[menu.selected];
+                match item {
+                    MenuItem::SystemsView => {
+                        self.config.systems_view = self.config.systems_view.toggled();
+                        if self.screen == Screen::Systems
+                            || (self.screen == Screen::Queue
+                                && self.before_queue == Screen::Systems)
+                        {
+                            self.load_system_thumbnails();
+                            self.load_preview();
+                        }
+                    }
+                    MenuItem::GamesView => {
+                        self.config.games_view = self.config.games_view.toggled();
+                        if self.screen == Screen::Games
+                            || (self.screen == Screen::Queue && self.before_queue == Screen::Games)
+                        {
+                            self.load_thumbnails();
+                            self.load_preview();
+                        }
+                    }
+                    _ if action != Action::Confirm => (),
+                    MenuItem::Downloads => {
+                        self.menu = None;
+                        if self.screen != Screen::Queue {
+                            self.before_queue = self.screen;
+                        }
+                        self.screen = Screen::Queue;
+                    }
+                    MenuItem::AdvancedSearch => {
+                        self.menu = None;
+                        self.open_advanced();
+                    }
+                    MenuItem::Reload => {
+                        self.menu = None;
+                        self.reload_catalog();
+                    }
+                    MenuItem::Refresh => {
+                        self.menu = None;
+                        self.refresh_frontend();
+                    }
+                    MenuItem::Quit => {
+                        self.menu = None;
+                        return self.action(Action::Quit);
+                    }
+                }
+            }
+            _ => (),
+        }
+        Ok(true)
+    }
+
+    fn refresh_frontend(&mut self) {
+        if !self.config.auto_refresh || self.frontend_refreshing {
+            return;
+        }
+        if self.jobs.iter().any(|job| !job.done) {
+            self.status = self.config.language.text("refresh_busy").into();
+            return;
+        }
+        self.frontend_refreshing = true;
+        self.status = self.config.language.text("refresh_running").into();
+        let (config, tx) = (self.config.clone(), self.tx.clone());
+        thread::spawn(move || {
+            let _ = tx.send(Message::FrontendRefreshed(frontend::refresh(&config)));
+        });
+    }
+
+    fn open_advanced(&mut self) {
+        self.advanced_generation += 1;
+        self.advanced = Some(advanced::AdvancedDialog::new(
+            &self.systems,
+            self.catalog_system.clone(),
+            &self.search_query,
+            &self.filters,
+        ));
+        let (api, tx, generation) = (self.api.clone(), self.tx.clone(), self.advanced_generation);
+        thread::spawn(move || {
+            let _ = tx.send(Message::FilterFields(generation, api.filter_fields()));
+        });
+    }
+
+    fn advanced_outcome(&mut self, outcome: Option<advanced::Outcome>) {
+        match outcome {
+            Some(advanced::Outcome::Cancel) => self.advanced = None,
+            Some(advanced::Outcome::Submit) => {
+                if self
+                    .advanced
+                    .as_ref()
+                    .is_some_and(|dialog| dialog.loading || dialog.error.is_some())
+                {
+                    return;
+                }
+                let dialog = self.advanced.take().unwrap();
+                self.filters = dialog
+                    .values
+                    .into_iter()
+                    .filter(|(_, value)| !value.trim().is_empty())
+                    .collect();
+                self.search_query.clear();
+                self.catalog_system = dialog.scope;
+                self.screen = Screen::Games;
+                self.games();
+            }
+            None => (),
+        }
+    }
+
+    fn alphabet_outcome(&mut self, outcome: Option<AlphabetOutcome>) {
+        match outcome {
+            Some(AlphabetOutcome::Cancel) => self.alphabet = None,
+            Some(AlphabetOutcome::Select(letter)) => {
+                self.alphabet = None;
+                if self.screen == Screen::Systems {
+                    let initial = letter.to_ascii_lowercase();
+                    if let Some(index) = self.systems.iter().position(|system| {
+                        system
+                            .display_name()
+                            .chars()
+                            .next()
+                            .is_some_and(|c| c.to_ascii_lowercase() == initial)
+                    }) {
+                        self.system_index = index;
+                        self.load_system_thumbnails();
+                        self.load_preview();
+                    } else {
+                        self.status = self.config.language.format("alphabet_missing", &[&letter]);
+                    }
+                } else if self.screen == Screen::Games {
+                    // Invalidate any in-flight scroll, but retain the current page
+                    // if this initial has no match or the network request fails.
+                    self.catalog_generation += 1;
+                    self.catalog_pending = None;
+                    self.loading = true;
+                    self.status = self.config.language.text("loading_catalog").into();
+                    let (api, tx, generation, system, query) = (
+                        self.api.clone(),
+                        self.tx.clone(),
+                        self.catalog_generation,
+                        self.catalog_system.clone(),
+                        self.search_query.clone(),
+                    );
+                    let config = self.config.clone();
+                    let filters = self.filters.clone();
+                    thread::spawn(move || {
+                        let result = api
+                            .games_at_letter_filtered(system.as_deref(), &query, letter, &filters)
+                            .map(|found| {
+                                found.map(|(mut page, index)| {
+                                    for game in &mut page.items {
+                                        game.installed =
+                                            config.rom_exists(&game.system, &game.path);
+                                    }
+                                    (page, index)
+                                })
+                            });
+                        let _ = tx.send(Message::Letter(generation, letter, result));
+                    });
+                }
+            }
+            None => (),
+        }
+    }
+
     fn search_outcome(&mut self, outcome: Option<SearchOutcome>) {
         match outcome {
             Some(SearchOutcome::Cancel) => self.search = None,
             Some(SearchOutcome::Submit) => {
                 let search = self.search.take().unwrap();
+                self.filters.remove("name");
                 self.search_query = search.query.trim().to_owned();
                 self.catalog_system = search.scope;
                 self.screen = Screen::Games;
@@ -1293,6 +1564,12 @@ fn main() -> Result<()> {
         catalog_system: None,
         search_query: String::new(),
         search: None,
+        alphabet: None,
+        menu: None,
+        advanced: None,
+        advanced_generation: 0,
+        filters: BTreeMap::new(),
+        frontend_refreshing: false,
         uninstall_confirmation: None,
     };
     if !smoke_test {
@@ -1305,8 +1582,13 @@ fn main() -> Result<()> {
         if !smoke_test {
             app.poll_reload();
         }
-        if app.search.is_some() != text_input_active {
-            text_input_active = app.search.is_some();
+        let wants_text_input = app.search.is_some()
+            || app
+                .advanced
+                .as_ref()
+                .is_some_and(|dialog| dialog.text_input());
+        if wants_text_input != text_input_active {
+            text_input_active = wants_text_input;
             if text_input_active {
                 video.text_input().start();
             } else {
@@ -1314,6 +1596,42 @@ fn main() -> Result<()> {
             }
         }
         for event in events.poll_iter() {
+            if matches!(
+                &event,
+                sdl2::event::Event::KeyDown {
+                    keycode: Some(sdl2::keyboard::Keycode::Escape),
+                    repeat: false,
+                    ..
+                } | sdl2::event::Event::ControllerButtonDown {
+                    button: sdl2::controller::Button::Start,
+                    ..
+                }
+            ) {
+                app.action(Action::Menu)?;
+                continue;
+            }
+            if app.menu.is_none() {
+                if let Some(dialog) = app.advanced.as_mut().filter(|dialog| dialog.text_input()) {
+                    if !matches!(
+                        &event,
+                        sdl2::event::Event::Quit { .. }
+                            | sdl2::event::Event::ControllerDeviceAdded { .. }
+                            | sdl2::event::Event::ControllerDeviceRemoved { .. }
+                    ) {
+                        dialog.event(&event);
+                        continue;
+                    }
+                }
+            }
+            if let Some(dialog) = &mut app.alphabet {
+                if matches!(&event, sdl2::event::Event::KeyDown { keycode: Some(key), .. }
+                    if key.name().len() == 1 || *key == sdl2::keyboard::Keycode::Escape || *key == sdl2::keyboard::Keycode::Backspace)
+                {
+                    let outcome = dialog.event(&event);
+                    app.alphabet_outcome(outcome);
+                    continue;
+                }
+            }
             if app.search.is_some()
                 && !matches!(
                     &event,
@@ -1327,7 +1645,7 @@ fn main() -> Result<()> {
                 continue;
             }
             if let Some(action) = input.event(event) {
-                if matches!(action, Action::Confirm | Action::Info | Action::Secondary)
+                if action == Action::Confirm
                     && app.screen == Screen::Games
                     && app.uninstall_confirmation.is_none()
                 {
@@ -1344,7 +1662,7 @@ fn main() -> Result<()> {
         for message in rx.try_iter().take(100) {
             app.message(message, &mut painter)?;
         }
-        if app.quit_requested && app.jobs.iter().all(|job| job.done) {
+        if app.quit_requested && app.jobs.iter().all(|job| job.done) && !app.frontend_refreshing {
             break;
         }
         let scene = if smoke_test {
@@ -1489,6 +1807,12 @@ mod tests {
             catalog_system: None,
             search_query: String::new(),
             search: None,
+            alphabet: None,
+            menu: None,
+            advanced: None,
+            advanced_generation: 0,
+            filters: BTreeMap::new(),
+            frontend_refreshing: false,
             uninstall_confirmation: None,
         }
     }
@@ -1497,10 +1821,90 @@ mod tests {
     fn queue_returns_to_previous_screen() {
         let mut app = app();
         app.screen = Screen::Detail;
-        app.action(Action::Queue).unwrap();
+        choose_menu(&mut app, MenuItem::Downloads);
         assert_eq!(app.screen, Screen::Queue);
         app.action(Action::Back).unwrap();
         assert_eq!(app.screen, Screen::Detail);
+    }
+
+    #[test]
+    fn back_never_quits_and_menu_owns_quit_and_independent_view_settings() {
+        let mut app = app();
+        assert!(app.action(Action::Back).unwrap());
+        assert!(!app.quit_requested);
+        app.action(Action::Menu).unwrap();
+        assert!(app.menu.is_some());
+        app.action(Action::Right).unwrap();
+        assert_eq!(app.config.systems_view, ViewMode::Grid);
+        assert_eq!(app.config.games_view, ViewMode::Grid);
+        app.action(Action::Down).unwrap();
+        app.action(Action::Confirm).unwrap();
+        assert_eq!(app.config.games_view, ViewMode::List);
+        app.action(Action::Back).unwrap();
+        assert!(app.menu.is_none());
+        assert!(app.action(Action::Back).unwrap());
+        assert!(!choose_menu(&mut app, MenuItem::Quit));
+    }
+
+    #[test]
+    fn manual_refresh_is_conditional_and_cannot_overlap_local_operations() {
+        let mut app = app();
+        assert!(!Menu::items(false).contains(&MenuItem::Refresh));
+        app.refresh_frontend();
+        assert!(!app.frontend_refreshing);
+        app.config.auto_refresh = true;
+        assert!(Menu::items(true).contains(&MenuItem::Refresh));
+        let (installer, _requests) = mpsc::channel();
+        app.installer = installer;
+        app.enqueue_job(smoke_page().items.remove(0), JobKind::Install)
+            .unwrap();
+        app.refresh_frontend();
+        assert!(!app.frontend_refreshing);
+        assert_eq!(app.status, app.config.language.text("refresh_busy"));
+        app.frontend_refreshing = true;
+        app.enqueue_job(smoke_page().items.remove(1), JobKind::Install)
+            .unwrap();
+        assert_eq!(app.jobs.len(), 1);
+        app.jobs[0].done = true;
+        assert!(app.action(Action::Quit).unwrap());
+        assert!(app.quit_requested);
+        app.frontend_refreshing = false;
+        assert!(!app.action(Action::Quit).unwrap());
+    }
+
+    #[test]
+    fn advanced_filters_apply_together_survive_reload_and_cancel_does_not_change_results() {
+        let mut app = app();
+        choose_menu(&mut app, MenuItem::AdvancedSearch);
+        let dialog = app.advanced.as_mut().unwrap();
+        dialog.set_fields(vec!["custom".into()]);
+        dialog.scope = Some("nes".into());
+        dialog.values.insert("name".into(), "=Mario".into());
+        dialog.values.insert("year".into(), ">=1990".into());
+        dialog.values.insert("players".into(), "2".into());
+        app.advanced_outcome(Some(advanced::Outcome::Submit));
+        assert_eq!(app.catalog_system.as_deref(), Some("nes"));
+        assert!(app.search_query.is_empty());
+        assert_eq!(app.filters["name"], "=Mario");
+        let filters = app.filters.clone();
+        app.open_advanced();
+        app.advanced.as_mut().unwrap().values.clear();
+        app.advanced_outcome(Some(advanced::Outcome::Cancel));
+        assert_eq!(app.filters, filters);
+        app.finish_reload(Ok((reload_state(), vec![nes()])));
+        assert_eq!(app.filters, filters);
+        assert_eq!(app.catalog_system.as_deref(), Some("nes"));
+    }
+
+    fn choose_menu(app: &mut App, item: MenuItem) -> bool {
+        app.action(Action::Menu).unwrap();
+        app.menu.as_mut().unwrap().selected = Menu::items(app.config.auto_refresh)
+            .iter()
+            .position(|candidate| *candidate == item)
+            .unwrap();
+        let running = app.action(Action::Confirm).unwrap();
+        app.menu = None;
+        running
     }
 
     fn reload_state() -> ReloadStatus {
@@ -1526,9 +1930,9 @@ mod tests {
     fn reload_is_available_from_catalogue_and_platforms_without_blocking_navigation() {
         let mut app = app();
         app.systems = vec![nes()];
-        app.action(Action::Reload).unwrap();
+        choose_menu(&mut app, MenuItem::Reload);
         assert!(app.reloading);
-        app.action(Action::Reload).unwrap();
+        choose_menu(&mut app, MenuItem::Reload);
         assert!(app.reloading);
         assert!(!app.loading);
         app.screen = Screen::Games;
@@ -1656,7 +2060,7 @@ mod tests {
         assert!(app.action(Action::Up).unwrap());
         assert!(app.action(Action::Down).unwrap());
         assert_eq!(app.system_index, 0);
-        assert!(!app.action(Action::Back).unwrap());
+        assert!(app.action(Action::Back).unwrap());
     }
 
     #[test]
@@ -1765,6 +2169,58 @@ mod tests {
                 .collect();
             assert_eq!(ids.len(), 105);
         }
+    }
+
+    #[test]
+    fn scrolling_after_a_letter_jump_prepends_and_appends_without_losing_selection() {
+        let mut app = app();
+        app.screen = Screen::Games;
+        app.page = Some(batch(100, 50, 230));
+        app.game_index = 0;
+        app.load_more();
+        assert_eq!(app.catalog_pending, Some(50));
+        assert!(app.receive_games(0, 50, Ok(batch(50, 50, 230))));
+        assert_eq!(app.page.as_ref().unwrap().offset, 50);
+        assert_eq!(app.game_index, 50);
+        assert_eq!(app.selected_game().unwrap().id, format!("{:064x}", 100));
+        app.game_index = 99;
+        app.load_more();
+        assert_eq!(app.catalog_pending, Some(150));
+        assert!(app.receive_games(0, 150, Ok(batch(150, 50, 230))));
+        assert_eq!(app.game_index, 99);
+        app.game_index = 0;
+        app.load_more();
+        assert_eq!(app.catalog_pending, Some(0));
+        assert!(app.receive_games(0, 0, Ok(batch(0, 50, 230))));
+        assert_eq!(app.page.as_ref().unwrap().offset, 0);
+        assert_eq!(app.page.as_ref().unwrap().items.len(), 200);
+        assert_eq!(app.game_index, 50);
+        assert_eq!(app.selected_game().unwrap().id, format!("{:064x}", 50));
+    }
+
+    #[test]
+    fn platform_letter_jump_uses_display_names_and_missing_letters_keep_selection() {
+        let mut app = app();
+        app.systems = vec![
+            nes(),
+            System {
+                id: "psx".into(),
+                name: "PlayStation".into(),
+                ..nes()
+            },
+        ];
+        app.action(Action::Alphabet).unwrap();
+        assert!(app.alphabet.is_some());
+        app.alphabet_outcome(Some(AlphabetOutcome::Select('S')));
+        assert_eq!(app.system_index, 1);
+        assert!(app.alphabet.is_none());
+        app.alphabet_outcome(Some(AlphabetOutcome::Select('Z')));
+        assert_eq!(app.system_index, 1);
+        assert!(app.status.contains('Z'));
+        app.action(Action::Alphabet).unwrap();
+        app.action(Action::Back).unwrap();
+        assert!(app.alphabet.is_none());
+        assert_eq!(app.screen, Screen::Systems);
     }
 
     #[test]
@@ -2053,15 +2509,15 @@ mod tests {
             app.action(Action::Confirm).unwrap();
             assert_eq!(app.jobs.len(), 1);
             assert!(requests.try_recv().is_err());
-            app.action(Action::Info).unwrap();
+            app.action(Action::Confirm).unwrap();
             assert_eq!(app.screen, Screen::Detail);
             assert_eq!(app.detail.as_ref().unwrap().id, expected);
             assert_eq!(app.jobs.len(), 1);
             app.action(Action::Back).unwrap();
             assert_eq!(app.game_index, 1);
             assert_eq!(app.config.games_view, view);
-            app.action(Action::Queue).unwrap();
-            app.action(Action::Secondary).unwrap();
+            choose_menu(&mut app, MenuItem::Downloads);
+            app.action(Action::Confirm).unwrap();
             assert!(app.jobs[0].cancel.load(Ordering::Relaxed));
         }
     }
@@ -2092,7 +2548,7 @@ mod tests {
         assert!(requests.try_recv().is_err());
         app.action(Action::Confirm).unwrap();
         app.action(Action::Right).unwrap();
-        app.action(Action::Queue).unwrap(); // Modal must not change its target/screen.
+        app.action(Action::Search).unwrap(); // Modal must not change its target/screen.
         assert_eq!(app.screen, Screen::Detail);
         app.action(Action::Confirm).unwrap();
         let (_, operation, cancel) = requests.try_recv().unwrap();
@@ -2131,14 +2587,14 @@ mod tests {
         app.page = Some(smoke_page());
         app.loading = true;
         app.action(Action::Confirm).unwrap();
-        app.action(Action::Info).unwrap();
+        app.action(Action::Confirm).unwrap();
         assert!(app.jobs.is_empty());
         assert_eq!(app.screen, Screen::Games);
         app.loading = false;
         app.game_index = 2;
         app.action(Action::Confirm).unwrap();
         assert!(app.jobs.is_empty());
-        app.action(Action::Secondary).unwrap();
+        app.action(Action::Alphabet).unwrap();
         assert_eq!(app.screen, Screen::Detail);
         app.action(Action::Confirm).unwrap();
         assert!(app.jobs.is_empty());
@@ -2150,14 +2606,14 @@ mod tests {
         app.screen = Screen::Games;
         app.page = Some(smoke_page());
         app.game_index = 6;
-        app.action(Action::ToggleView).unwrap();
+        choose_menu(&mut app, MenuItem::GamesView);
         assert_eq!(app.config.games_view, ViewMode::List);
         assert_eq!(app.game_index, 6);
         app.action(Action::Down).unwrap();
         assert_eq!(app.game_index, 7);
         app.action(Action::Right).unwrap();
         assert_eq!(app.game_index, 7);
-        app.action(Action::ToggleView).unwrap();
+        choose_menu(&mut app, MenuItem::GamesView);
         app.action(Action::Up).unwrap();
         assert_eq!(app.game_index, 2);
         assert_eq!(app.config.systems_view, ViewMode::List);
@@ -2171,14 +2627,14 @@ mod tests {
             })
             .collect();
         app.system_index = 6;
-        app.action(Action::ToggleView).unwrap();
+        choose_menu(&mut app, MenuItem::SystemsView);
         assert_eq!(app.system_index, 6);
         assert_eq!(app.config.systems_view, ViewMode::Grid);
         app.action(Action::Down).unwrap();
         assert_eq!(app.system_index, 11);
         app.action(Action::Up).unwrap();
         assert_eq!(app.system_index, 6);
-        app.action(Action::ToggleView).unwrap();
+        choose_menu(&mut app, MenuItem::SystemsView);
         app.action(Action::Up).unwrap();
         assert_eq!(app.system_index, 5);
     }

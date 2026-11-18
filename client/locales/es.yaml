@@ -1,4 +1,38 @@
 tagline: TU PRÓXIMA AVENTURA EMPIEZA AQUÍ
+menu_title: Menú
+menu_shortcut: Start / Esc · Menú
+menu_systems_view: Vista de consolas
+menu_games_view: Vista de ROMs
+menu_reload: Recargar catálogo del servidor
+menu_refresh: Actualizar juegos del frontend
+menu_controls: "↑ ↓: elegir · ← → / A: cambiar · A: abrir · B / Retroceso: cerrar"
+back_key: Retroceso / B
+download_notification: "Descarga {0} / {1}"
+refresh_running: Actualizando frontend…
+refresh_complete: Actualización de juegos solicitada al frontend.
+refresh_busy: Espera a que terminen las operaciones locales antes de actualizar.
+refresh_failed: "Error al actualizar el frontend: {0}"
+advanced_title: Búsqueda avanzada
+advanced_no_results: Ningún juego coincide con los filtros.
+advanced_help: "Texto parcial · =exacto · >=mínimo · <=máximo · Criterios combinados"
+advanced_loading: Cargando campos de gamelist.xml…
+advanced_fields_failed: "Búsqueda avanzada no disponible: {0} (comprueba la versión del servidor)"
+advanced_controls: "↑ ↓: campo · A: editar · ← →: plataforma · B / Retroceso: cancelar"
+advanced_apply: Aplicar filtros
+advanced_clear: Borrar todos los filtros
+advanced_active: "BÚSQUEDA AVANZADA · {0} FILTROS"
+filter_platform: Plataforma
+filter_name: Nombre
+filter_year: Año
+filter_genre: Género
+filter_publisher: Editor
+filter_rating: Nota (0–1)
+filter_any: Cualquiera
+filter_value: Valor del filtro
+alphabet_jump: Letra
+alphabet_title: Ir directamente a una letra
+alphabet_controls: "↑ ↓ ← →: elegir · Intro / A: confirmar · Retroceso / B: cancelar · Teclado: letra directa"
+alphabet_missing: "Ningún nombre empieza por {0}."
 nav_platforms: 01  Plataformas
 nav_transfers: 02  Descargas
 active_transfers: "{0} en cola / activas"
@@ -110,7 +144,7 @@ uninstall_job: "Desinstalar: {0}"
 uninstall_preserved: Solo ROM local + entrada XML · imágenes y partidas conservadas.
 uninstall_confirm_title: ¿Desinstalar este juego?
 uninstall_confirm_body: Se eliminarán la ROM de la carpeta de ROMs del cliente y su entrada en gamelist.xml. Se conservarán las imágenes y las partidas guardadas.
-uninstall_confirm_controls: "← →: elegir · A / Intro: confirmar · B / Esc: cancelar"
+uninstall_confirm_controls: "← →: elegir · A / Intro: confirmar · B / Retroceso: cancelar"
 operation_pending: Operación ya en espera / en curso
 screenshot: CAPTURA DE PANTALLA
 screenshot_missing: SIN CAPTURA
@@ -121,8 +155,8 @@ all_platforms: Todas las plataformas
 search_platform: "Plataforma: {0}"
 space_key: Espacio
 clear_search: Borrar
-search_keyboard_hint: "Escribe o A: carácter · X: borrar · Start/Intro: buscar · B/Esc: cerrar"
-search_scope_hint: "Tab / Y: esta plataforma o todas · Supr: vaciar el texto"
+search_keyboard_hint: "Teclado o A: carácter · OK / Intro: confirmar · B: cerrar · Start / Esc: menú"
+search_scope_hint: "Tecla Plataforma: esta o todas · ←: borrar · Borrar: vaciar"
 search_global_hint: "Buscar en todas las plataformas · Supr: vaciar el texto"
 search_results: "BÚSQUEDA: {0}"
 search_no_results: "No hay juegos para «{0}»."
