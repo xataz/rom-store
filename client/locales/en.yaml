@@ -1,11 +1,28 @@
 tagline: YOUR NEXT ADVENTURE STARTS HERE
 menu_title: Menu
+settings_title: Configuration
+settings_help: Values are validated and saved when this submenu closes.
+settings_controls: "↑ ↓: choose · ← → / A: change · B / Esc / Start: save and return"
+settings_input_hint: "Configuration field · OK: confirm · B: cancel entry · Empty: optional value"
+settings_saved: "Configuration saved to {0}"
+settings_display_failed: "Configuration saved, display update failed: {0}"
+settings_enabled: Enabled
+settings_disabled: Disabled
+settings_unset: Automatic / not set
+settings_save_close: Save and return to menu
+settings_reload: Reload file (discard changes)
+settings_remove: Remove
+settings_add_mapping: Add platform mapping
+settings_add_argument: Add executable / argument
+settings_executable: Executable
+settings_argument: Argument
+numeric_keyboard_hint: Numeric keypad · Alphabetic characters are not accepted
 menu_shortcut: Start / Esc · Menu
 menu_systems_view: Console view
 menu_games_view: ROM view
 menu_reload: Reload server catalogue
 menu_refresh: Refresh frontend games
-menu_controls: "↑ ↓: choose · ← → / A: change · A: open · B / Backspace: close"
+menu_controls: "↑ ↓: choose · A / Enter: open · B / Esc / Start: close"
 back_key: Backspace / B
 download_notification: "Download {0} / {1}"
 refresh_running: Refreshing frontend…

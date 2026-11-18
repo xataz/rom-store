@@ -1,8 +1,8 @@
 //! Embedded translations: no locale files or network requests needed at runtime.
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Display, sync::OnceLock};
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Language {
     #[default]
@@ -139,6 +139,7 @@ mod tests {
             include_str!("alphabet.rs"),
             include_str!("advanced.rs"),
             include_str!("menu.rs"),
+            include_str!("settings.rs"),
         ] {
             for marker in [".text(", ".format("] {
                 for tail in source.split(marker).skip(1) {

@@ -274,6 +274,21 @@ impl<'a> Painter<'a> {
             .map_err(|e| anyhow!(e))
     }
 
+    pub fn reconfigure(&mut self, font: &Path, language: Language) -> Result<()> {
+        self.font = crate::fonts::load_font(font, language)?;
+        self.language = language;
+        self.texts.clear();
+        self.text_cache_bytes = 0;
+        Ok(())
+    }
+
+    pub fn clear_media(&mut self) {
+        self.art = None;
+        self.preview = None;
+        self.marquee = None;
+        self.thumbnails.clear();
+    }
+
     fn image_texture(&self, art: image::RgbaImage) -> Result<Texture<'a>> {
         let mut texture = self.creator.create_texture_static(
             PixelFormatEnum::RGBA32,

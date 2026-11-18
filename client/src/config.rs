@@ -1,12 +1,12 @@
 use crate::i18n::Language;
 use anyhow::{bail, Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ViewMode {
     Grid,
@@ -22,7 +22,7 @@ impl ViewMode {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Frontend {
     #[default]
@@ -35,7 +35,7 @@ pub enum Frontend {
     Custom,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub server_url: String,
@@ -83,6 +83,55 @@ impl Default for Config {
 }
 
 impl Config {
+    pub fn default_path() -> PathBuf {
+        std::env::var_os("XDG_CONFIG_HOME")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                PathBuf::from(std::env::var_os("HOME").unwrap_or_else(|| ".".into()))
+                    .join(".config")
+            })
+            .join("romstore/config.yaml")
+    }
+
+    /// Validate before touching the destination, then atomically replace it.
+    /// Existing symlinks keep pointing to the same configuration file.
+    pub fn save(&self, path: &Path) -> Result<()> {
+        use std::io::Write;
+        self.validate()?;
+        let contents = serde_saphyr::to_string(self)?;
+        let target = if path.exists() {
+            std::fs::canonicalize(path)?
+        } else {
+            path.to_path_buf()
+        };
+        if std::fs::symlink_metadata(&target).is_ok_and(|m| m.file_type().is_symlink()) {
+            bail!("Le fichier de configuration est un lien symbolique sans cible valide");
+        }
+        let permissions = std::fs::metadata(&target).ok().map(|m| m.permissions());
+        if permissions.as_ref().is_some_and(|p| p.readonly()) {
+            bail!(
+                "Le fichier de configuration est en lecture seule : {}",
+                path.display()
+            );
+        }
+        let parent = target
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        std::fs::create_dir_all(parent)?;
+        let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+        if let Some(permissions) = permissions {
+            temporary.as_file().set_permissions(permissions)?;
+        }
+        temporary.write_all(contents.as_bytes())?;
+        temporary.as_file().sync_all()?;
+        temporary
+            .persist(&target)
+            .with_context(|| format!("Sauvegarde de {} impossible", path.display()))?;
+        Ok(())
+    }
+
     pub fn local_system<'a>(&'a self, server_system: &'a str) -> &'a str {
         self.system_mapping
             .get(server_system)
@@ -103,6 +152,7 @@ impl Config {
             Some(&self.roms_dir),
             self.media_dir.as_ref(),
             self.gamelists_dir.as_ref(),
+            Some(&self.cache_dir),
         ]
         .into_iter()
         .flatten()
@@ -130,7 +180,12 @@ impl Config {
             &std::fs::read_to_string(path)
                 .with_context(|| format!("Configuration introuvable : {}", path.display()))?,
         ).with_context(|| format!("Configuration YAML invalide / Invalid YAML configuration: {} (language: fr, en, es, de)", path.display()))?;
-        let url = reqwest::Url::parse(&config.server_url)?;
+        config.validate()?;
+        Ok(config)
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        let url = reqwest::Url::parse(&self.server_url)?;
         if !matches!(url.scheme(), "http" | "https")
             || url.host_str().is_none()
             || url.query().is_some()
@@ -140,28 +195,113 @@ impl Config {
         {
             bail!("server_url doit être une URL HTTP(S) sans identifiants, paramètres ou fragment");
         }
-        if config
+        if self
             .refresh_command
             .first()
             .is_some_and(|program| program.trim().is_empty())
-            || config.refresh_command.iter().any(|arg| arg.contains('\0'))
+            || self.refresh_command.iter().any(|arg| arg.contains('\0'))
         {
             bail!("refresh_command doit contenir un exécutable non vide et des arguments sans caractère NUL");
         }
-        if config.auto_refresh
-            && config.frontend != Frontend::Batocera
-            && config.refresh_command.is_empty()
+        if self.auto_refresh
+            && self.frontend != Frontend::Batocera
+            && self.refresh_command.is_empty()
         {
             bail!("auto_refresh nécessite frontend: batocera ou une refresh_command adaptée au frontend (ES-DE/Recalbox/autre)");
         }
-        config.validate_layout()?;
-        Ok(config)
+        self.validate_layout()?;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_setting_is_saved_and_loaded_with_its_type_and_exact_string_values() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("nested/config.yaml");
+        let config = Config {
+            server_url: "https://example.org:8443/prefix".into(),
+            roms_dir: "./Mes ROMs".into(),
+            media_dir: Some("/media/ES-DE".into()),
+            gamelists_dir: Some("/home/user/gamelists".into()),
+            system_mapping: BTreeMap::from([("gamecube".into(), "gc".into())]),
+            cache_dir: "./cache".into(),
+            font_path: "/Fonts/Ma Police.ttf".into(),
+            fullscreen: true,
+            language: Language::De,
+            systems_view: ViewMode::Grid,
+            games_view: ViewMode::List,
+            frontend: Frontend::Esde,
+            auto_refresh: true,
+            refresh_command: vec![
+                "/mon script".into(),
+                "argument with spaces".into(),
+                "true".into(),
+                "".into(),
+                "# : [quoted]".into(),
+            ],
+        };
+        config.save(&path).unwrap();
+        assert_eq!(Config::load(&path).unwrap(), config);
+        assert_eq!(
+            std::fs::read_dir(path.parent().unwrap()).unwrap().count(),
+            1
+        );
+    }
+
+    #[test]
+    fn invalid_config_never_replaces_the_existing_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.yaml");
+        let original = b"# Configuration personnelle\nserver_url: http://localhost:8000\n";
+        std::fs::write(&path, original).unwrap();
+        let config = Config {
+            server_url: "file:///etc/passwd".into(),
+            ..Config::default()
+        };
+        assert!(config.save(&path).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+    }
+
+    #[test]
+    fn read_only_config_is_not_silently_replaced_by_an_atomic_rename() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.yaml");
+        std::fs::write(&path, "{}\n").unwrap();
+        let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&path, permissions).unwrap();
+        assert!(Config::default()
+            .save(&path)
+            .unwrap_err()
+            .to_string()
+            .contains("lecture seule"));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{}\n");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn saving_follows_existing_symlinks_without_replacing_them_and_rejects_dangling_links() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("actual.yaml");
+        let link = directory.path().join("config.yaml");
+        std::fs::write(&target, "{}").unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let config = Config::default();
+        config.save(&link).unwrap();
+        assert!(std::fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(Config::load(&target).unwrap(), config);
+        let dangling = directory.path().join("dangling.yaml");
+        std::os::unix::fs::symlink(directory.path().join("absent.yaml"), &dangling).unwrap();
+        assert!(config.save(&dangling).is_err());
+        assert!(!directory.path().join("absent.yaml").exists());
+    }
 
     fn load(text: &str) -> Result<Config> {
         let directory = tempfile::tempdir()?;

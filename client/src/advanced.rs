@@ -1,7 +1,7 @@
 //! A controller-operated form, using the existing on-screen keyboard for values.
 use crate::{
     input::Action,
-    search::{SearchDialog, SearchOutcome},
+    search::{KeyboardMode, SearchDialog, SearchOutcome},
     ui::{self, Painter, ACCENT, MUTED, TEXT},
 };
 use anyhow::Result;
@@ -154,8 +154,10 @@ impl AdvancedDialog {
             Action::Confirm if self.selected == 0 => self.cycle_platform(true),
             Action::Confirm if self.selected <= self.fields.len() => {
                 let field = &self.fields[self.selected - 1];
-                self.editing = Some(SearchDialog::text_entry(
+                self.editing = Some(SearchDialog::entry(
                     self.values.get(field).cloned().unwrap_or_default(),
+                    KeyboardMode::for_filter(field),
+                    256,
                 ));
             }
             Action::Confirm if self.selected == self.fields.len() + 1 => {

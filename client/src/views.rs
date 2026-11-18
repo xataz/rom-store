@@ -110,6 +110,9 @@ impl App {
                 self.frontend_refreshing,
             )?;
         }
+        if let Some(settings) = &self.settings {
+            settings.draw(canvas, painter, self.config.language)?;
+        }
         if let Some(advanced) = &self.advanced {
             advanced.draw(canvas, painter, self.config.language)?;
         }

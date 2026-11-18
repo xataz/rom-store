@@ -1,11 +1,28 @@
 tagline: TU PRÓXIMA AVENTURA EMPIEZA AQUÍ
 menu_title: Menú
+settings_title: Configuración
+settings_help: Los valores se validan y guardan al cerrar este submenú.
+settings_controls: "↑ ↓: elegir · ← → / A: cambiar · B / Esc / Start: guardar y volver"
+settings_input_hint: "Campo de configuración · OK: confirmar · B: cancelar entrada · Vacío: opcional"
+settings_saved: "Configuración guardada en {0}"
+settings_display_failed: "Configuración guardada, error de actualización de pantalla: {0}"
+settings_enabled: Activado
+settings_disabled: Desactivado
+settings_unset: Automático / sin definir
+settings_save_close: Guardar y volver al menú
+settings_reload: Recargar archivo (descartar cambios)
+settings_remove: Eliminar
+settings_add_mapping: Añadir correspondencia de plataforma
+settings_add_argument: Añadir ejecutable / argumento
+settings_executable: Ejecutable
+settings_argument: Argumento
+numeric_keyboard_hint: Teclado numérico · No se aceptan caracteres alfabéticos
 menu_shortcut: Start / Esc · Menú
 menu_systems_view: Vista de consolas
 menu_games_view: Vista de ROMs
 menu_reload: Recargar catálogo del servidor
 menu_refresh: Actualizar juegos del frontend
-menu_controls: "↑ ↓: elegir · ← → / A: cambiar · A: abrir · B / Retroceso: cerrar"
+menu_controls: "↑ ↓: elegir · A / Intro: abrir · B / Esc / Start: cerrar"
 back_key: Retroceso / B
 download_notification: "Descarga {0} / {1}"
 refresh_running: Actualizando frontend…

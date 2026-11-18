@@ -1,11 +1,28 @@
 tagline: UNE NOUVELLE PARTIE VOUS ATTEND
 menu_title: Menu
+settings_title: Configuration
+settings_help: Les valeurs sont validées et sauvegardées à la fermeture de ce sous-menu.
+settings_controls: "↑ ↓ : choisir · ← → / A : modifier · B / Échap / Start : sauvegarder et revenir"
+settings_input_hint: "Champ de configuration · OK : valider · B : annuler la saisie · Vide : valeur facultative"
+settings_saved: "Configuration sauvegardée dans {0}"
+settings_display_failed: "Configuration sauvegardée, affichage non actualisé : {0}"
+settings_enabled: Activé
+settings_disabled: Désactivé
+settings_unset: Automatique / non défini
+settings_save_close: Sauvegarder et revenir au menu
+settings_reload: Recharger le fichier (abandonner les modifications)
+settings_remove: Supprimer
+settings_add_mapping: Ajouter une correspondance de plateforme
+settings_add_argument: Ajouter un exécutable / argument
+settings_executable: Exécutable
+settings_argument: Argument
+numeric_keyboard_hint: Pavé numérique · Aucun caractère alphabétique accepté
 menu_shortcut: Start / Échap · Menu
 menu_systems_view: Vue des consoles
 menu_games_view: Vue des ROMs
 menu_reload: Recharger le catalogue serveur
 menu_refresh: Actualiser les jeux du frontend
-menu_controls: "↑ ↓ : choisir · ← → / A : modifier · A : ouvrir · B / Retour : fermer"
+menu_controls: "↑ ↓ : choisir · A / Entrée : ouvrir · B / Échap / Start : fermer"
 back_key: Retour / B
 download_notification: "Téléchargement {0} / {1}"
 refresh_running: Actualisation du frontend en cours…

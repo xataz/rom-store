@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub const SCENES: usize = 34;
+pub const SCENES: usize = 40;
 
 fn media(id: char, role: &str) -> File {
     File {
@@ -109,6 +109,7 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
     app.uninstall_confirmation = None;
     app.alphabet = None;
     app.menu = None;
+    app.settings = None;
     app.advanced = None;
     app.frontend_refreshing = false;
     match frame {
@@ -391,7 +392,7 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
             app.config.auto_refresh = frame == 29;
             app.frontend_refreshing = frame == 29;
             app.menu = Some(crate::menu::Menu {
-                selected: if frame == 28 { 0 } else { 5 },
+                selected: if frame == 28 { 0 } else { 4 },
             });
         }
         30 | 31 => {
@@ -434,6 +435,43 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
             app.filters.insert("players".into(), "2".into());
             app.status = l.text("navigation_hint").into();
         }
+        34..=39 => {
+            app.menu = Some(crate::menu::Menu::default());
+            let mut dialog =
+                crate::settings::SettingsDialog::new(&app.config, app.config_path.clone())?;
+            match frame {
+                35 => dialog.selected = 10,
+                36 => {
+                    dialog
+                        .draft
+                        .system_mapping
+                        .insert("gamecube".into(), "gc".into());
+                    dialog.selected = 13;
+                    dialog.action(crate::input::Action::Confirm);
+                }
+                37 => {
+                    dialog.draft.refresh_command = vec![
+                        "/usr/local/bin/refresh-games".into(),
+                        "argument with spaces".into(),
+                    ];
+                    dialog.selected = 14;
+                    dialog.action(crate::input::Action::Confirm);
+                }
+                38 => {
+                    dialog.selected = 3;
+                    dialog.action(crate::input::Action::Confirm);
+                }
+                39 => {
+                    dialog.selected = 12;
+                    dialog.error = Some(
+                        "auto_refresh nécessite frontend: batocera ou une refresh_command adaptée"
+                            .into(),
+                    );
+                }
+                _ => (),
+            }
+            app.settings = Some(dialog);
+        }
         _ => unreachable!(),
     }
     Ok([
@@ -471,5 +509,11 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
         "advanced-search-keyboard",
         "download-notification",
         "advanced-search-results",
+        "settings",
+        "settings-scrolled",
+        "settings-mapping",
+        "settings-command",
+        "settings-port-keypad",
+        "settings-validation-error",
     ][frame])
 }

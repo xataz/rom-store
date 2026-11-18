@@ -5,6 +5,7 @@ mod fonts;
 mod input;
 mod menu;
 mod search;
+mod settings;
 mod smoke;
 mod ui;
 mod views;
@@ -42,9 +43,9 @@ use std::{
 use ui::Painter;
 
 enum Message {
-    ReloadStarted(Result<ReloadStatus>),
-    ReloadState(Result<ReloadStatus>),
-    Reloaded(Result<(ReloadStatus, Vec<System>)>),
+    ReloadStarted(u64, Result<ReloadStatus>),
+    ReloadState(u64, Result<ReloadStatus>),
+    Reloaded(u64, Result<(ReloadStatus, Vec<System>)>),
     Systems(u64, Result<Vec<System>>),
     Games(u64, usize, Result<Page>),
     Letter(u64, char, Result<Option<(Page, usize)>>),
@@ -90,7 +91,7 @@ enum Operation {
     Install(String),
     Uninstall(Box<Game>),
 }
-type InstallRequest = (usize, Operation, Arc<AtomicBool>);
+type InstallRequest = (usize, Operation, Arc<AtomicBool>, Api, Config);
 
 struct UninstallConfirmation {
     game: Game,
@@ -167,6 +168,11 @@ fn move_selection(index: usize, len: usize, action: Action, view: ViewMode) -> u
 
 struct App {
     config: Config,
+    config_path: PathBuf,
+    settings: Option<settings::SettingsDialog>,
+    connection_generation: u64,
+    ui_dirty: bool,
+    clear_artwork: bool,
     api: Api,
     tx: mpsc::Sender<Message>,
     installer: mpsc::Sender<InstallRequest>,
@@ -214,9 +220,13 @@ impl App {
         self.reloading = true;
         self.reload_poll_pending = true;
         self.status = self.config.language.text("reloading_catalog").into();
-        let (api, tx) = (self.api.clone(), self.tx.clone());
+        let (api, tx, generation) = (
+            self.api.clone(),
+            self.tx.clone(),
+            self.connection_generation,
+        );
         thread::spawn(move || {
-            let _ = tx.send(Message::ReloadStarted(api.start_reload()));
+            let _ = tx.send(Message::ReloadStarted(generation, api.start_reload()));
         });
     }
 
@@ -225,9 +235,13 @@ impl App {
             return;
         }
         self.reload_poll_pending = true;
-        let (api, tx) = (self.api.clone(), self.tx.clone());
+        let (api, tx, generation) = (
+            self.api.clone(),
+            self.tx.clone(),
+            self.connection_generation,
+        );
         thread::spawn(move || {
-            let _ = tx.send(Message::ReloadState(api.reload_status()));
+            let _ = tx.send(Message::ReloadState(generation, api.reload_status()));
         });
     }
 
@@ -240,10 +254,14 @@ impl App {
                 "completed" if self.reloading => {
                     // Refresh once, without blocking navigation or starting another scan.
                     self.reload_poll_pending = true;
-                    let (api, tx) = (self.api.clone(), self.tx.clone());
+                    let (api, tx, generation) = (
+                        self.api.clone(),
+                        self.tx.clone(),
+                        self.connection_generation,
+                    );
                     thread::spawn(move || {
                         let result = api.systems().map(|systems| (state, systems));
-                        let _ = tx.send(Message::Reloaded(result));
+                        let _ = tx.send(Message::Reloaded(generation, result));
                     });
                 }
                 "failed" if self.reloading => self.finish_reload(Err(anyhow!(
@@ -699,7 +717,8 @@ impl App {
             JobKind::Install => Operation::Install(game.id),
             JobKind::Uninstall => Operation::Uninstall(Box::new(game)),
         };
-        self.installer.send((id, operation, cancel))?;
+        self.installer
+            .send((id, operation, cancel, self.api.clone(), self.config.clone()))?;
         self.status = self.config.language.text("queued_hint").into();
         Ok(())
     }
@@ -707,6 +726,16 @@ impl App {
     fn action(&mut self, action: Action) -> Result<bool> {
         if self.quit_requested {
             return Ok(self.frontend_refreshing || self.jobs.iter().any(|job| !job.done));
+        }
+        if self.settings.is_some() {
+            if matches!(action, Action::Menu | Action::Quit) {
+                if self.close_settings() && action == Action::Quit {
+                    return self.action(Action::Quit);
+                }
+            } else if self.settings.as_mut().unwrap().action(action) {
+                self.close_settings();
+            }
+            return Ok(true);
         }
         if action == Action::Menu {
             if self.menu.is_some() {
@@ -932,10 +961,22 @@ impl App {
                     }
                 }
             }
-            Message::ReloadStarted(Err(error)) => self.finish_reload(Err(error)),
-            Message::ReloadStarted(Ok(state)) => self.receive_reload_status(Ok(state)),
-            Message::ReloadState(result) => self.receive_reload_status(result),
-            Message::Reloaded(result) => self.finish_reload(result),
+            Message::ReloadStarted(generation, result)
+                if generation == self.connection_generation =>
+            {
+                match result {
+                    Err(error) => self.finish_reload(Err(error)),
+                    Ok(state) => self.receive_reload_status(Ok(state)),
+                }
+            }
+            Message::ReloadState(generation, result)
+                if generation == self.connection_generation =>
+            {
+                self.receive_reload_status(result)
+            }
+            Message::Reloaded(generation, result) if generation == self.connection_generation => {
+                self.finish_reload(result)
+            }
             Message::Systems(generation, result) if generation == self.generation => {
                 self.loading = false;
                 match result {
@@ -1115,6 +1156,7 @@ impl App {
     fn menu_action(&mut self, action: Action) -> Result<bool> {
         let items = Menu::items(self.config.auto_refresh);
         let menu = self.menu.as_mut().unwrap();
+        menu.selected = menu.selected.min(items.len() - 1);
         match action {
             Action::Up => menu.selected = menu.selected.saturating_sub(1),
             Action::Down => menu.selected = (menu.selected + 1).min(items.len() - 1),
@@ -1122,26 +1164,14 @@ impl App {
             Action::Confirm | Action::Left | Action::Right => {
                 let item = items[menu.selected];
                 match item {
-                    MenuItem::SystemsView => {
-                        self.config.systems_view = self.config.systems_view.toggled();
-                        if self.screen == Screen::Systems
-                            || (self.screen == Screen::Queue
-                                && self.before_queue == Screen::Systems)
-                        {
-                            self.load_system_thumbnails();
-                            self.load_preview();
-                        }
-                    }
-                    MenuItem::GamesView => {
-                        self.config.games_view = self.config.games_view.toggled();
-                        if self.screen == Screen::Games
-                            || (self.screen == Screen::Queue && self.before_queue == Screen::Games)
-                        {
-                            self.load_thumbnails();
-                            self.load_preview();
-                        }
-                    }
                     _ if action != Action::Confirm => (),
+                    MenuItem::Settings => {
+                        match settings::SettingsDialog::new(&self.config, self.config_path.clone())
+                        {
+                            Ok(dialog) => self.settings = Some(dialog),
+                            Err(error) => self.status = format!("{error:#}"),
+                        }
+                    }
                     MenuItem::Downloads => {
                         self.menu = None;
                         if self.screen != Screen::Queue {
@@ -1170,6 +1200,121 @@ impl App {
             _ => (),
         }
         Ok(true)
+    }
+
+    fn close_settings(&mut self) -> bool {
+        let prepared = (|| -> Result<(Config, Api)> {
+            let dialog = self.settings.as_mut().unwrap();
+            dialog.finish_input()?;
+            dialog.draft.validate()?;
+            let config = dialog.draft.clone();
+            let api = if config.server_url == self.config.server_url {
+                self.api.clone()
+            } else {
+                Api::new(&config.server_url)?
+            };
+            dialog.save()?;
+            Ok((config, api))
+        })();
+        match prepared {
+            Ok((config, api)) => {
+                self.settings = None;
+                self.apply_config(config, api);
+                self.status = self
+                    .config
+                    .language
+                    .format("settings_saved", &[&self.config_path.display()]);
+                true
+            }
+            Err(error) => {
+                self.settings.as_mut().unwrap().error = Some(format!("{error:#}"));
+                false
+            }
+        }
+    }
+
+    fn apply_config(&mut self, config: Config, api: Api) {
+        let server_changed = config.server_url != self.config.server_url;
+        let cache_changed = config.cache_dir != self.config.cache_dir;
+        let library_changed = config.roms_dir != self.config.roms_dir
+            || config.system_mapping != self.config.system_mapping;
+        self.ui_dirty |= config.language != self.config.language
+            || config.font_path != self.config.font_path
+            || config.fullscreen != self.config.fullscreen;
+        self.config = config;
+        if server_changed || cache_changed {
+            self.api = api;
+            self.gallery_cancel.store(true, Ordering::Relaxed);
+            self.generation += 1;
+            self.gallery_generation += 1;
+            self.preview_generation += 1;
+            self.gallery_ids.clear();
+            self.preview_requests = ArtworkLoader::new(
+                1,
+                self.api.clone(),
+                self.config.cache_dir.clone(),
+                self.tx.clone(),
+            );
+            self.gallery_requests = ArtworkLoader::new(
+                2,
+                self.api.clone(),
+                self.config.cache_dir.clone(),
+                self.tx.clone(),
+            );
+            self.clear_artwork = true;
+        }
+        if server_changed {
+            self.connection_generation += 1;
+            self.catalog_generation += 1;
+            self.catalog_pending = None;
+            self.reloading = false;
+            self.reload_poll_pending = false;
+            self.next_reload_poll = Instant::now();
+            self.systems.clear();
+            self.system_index = 0;
+            self.page = None;
+            self.detail = None;
+            self.game_index = 0;
+            self.catalog_system = None;
+            self.search_query.clear();
+            self.filters.clear();
+            if self.screen == Screen::Queue {
+                self.before_queue = Screen::Systems;
+            } else {
+                self.screen = Screen::Systems;
+            }
+            self.systems();
+            return;
+        }
+        if library_changed {
+            self.catalog_generation += 1;
+            self.catalog_pending = None;
+            for game in self
+                .page
+                .iter_mut()
+                .flat_map(|page| &mut page.items)
+                .chain(self.detail.iter_mut())
+            {
+                game.installed = self.config.rom_exists(&game.system, &game.path);
+            }
+        }
+        let screen = if self.screen == Screen::Queue {
+            self.before_queue
+        } else {
+            self.screen
+        };
+        if self.loading && screen == Screen::Systems && cache_changed {
+            self.systems();
+        }
+        if self.loading && screen == Screen::Games && library_changed {
+            self.games();
+        }
+        match screen {
+            Screen::Systems => self.load_system_thumbnails(),
+            Screen::Games => self.load_thumbnails(),
+            _ => (),
+        }
+        self.load_preview();
     }
 
     fn refresh_frontend(&mut self) {
@@ -1425,8 +1570,9 @@ fn main() -> Result<()> {
         }
     }
     if help {
-        let language = if let Some(path) = &config_path {
-            Config::load(path)?.language
+        let help_path = config_path.clone().unwrap_or_else(Config::default_path);
+        let language = if config_path.is_some() || help_path.exists() {
+            Config::load(&help_path)?.language
         } else {
             Language::default()
         };
@@ -1442,8 +1588,15 @@ fn main() -> Result<()> {
     if let Some(directory) = &screenshots {
         fs::create_dir_all(directory)?;
     }
-    let config = if let Some(path) = config_path {
-        Config::load(&path)?
+    let explicit_config = config_path.is_some();
+    let config_path = config_path.unwrap_or_else(Config::default_path);
+    let config_path = if config_path.is_absolute() {
+        config_path
+    } else {
+        std::env::current_dir()?.join(config_path)
+    };
+    let config = if explicit_config || config_path.exists() {
+        Config::load(&config_path)?
     } else {
         Config::default()
     };
@@ -1494,9 +1647,9 @@ fn main() -> Result<()> {
     let mut events = sdl.event_pump().map_err(|e| anyhow!(e))?;
     let (tx, rx) = mpsc::channel();
     let (installer, requests) = mpsc::channel::<InstallRequest>();
-    let (install_api, install_config, install_tx) = (api.clone(), config.clone(), tx.clone());
+    let install_tx = tx.clone();
     thread::spawn(move || {
-        for (id, operation, cancel) in requests {
+        for (id, operation, cancel, install_api, install_config) in requests {
             let _ = install_tx.send(Message::Started(id));
             let last = RefCell::new(Instant::now() - Duration::from_secs(1));
             let result = (|| {
@@ -1534,6 +1687,11 @@ fn main() -> Result<()> {
     let gallery_requests = ArtworkLoader::new(2, api.clone(), config.cache_dir.clone(), tx.clone());
     let mut app = App {
         config,
+        config_path,
+        settings: None,
+        connection_generation: 0,
+        ui_dirty: false,
+        clear_artwork: false,
         api,
         tx,
         installer,
@@ -1584,6 +1742,10 @@ fn main() -> Result<()> {
         }
         let wants_text_input = app.search.is_some()
             || app
+                .settings
+                .as_ref()
+                .is_some_and(|dialog| dialog.text_input())
+            || app
                 .advanced
                 .as_ref()
                 .is_some_and(|dialog| dialog.text_input());
@@ -1609,6 +1771,17 @@ fn main() -> Result<()> {
             ) {
                 app.action(Action::Menu)?;
                 continue;
+            }
+            if let Some(dialog) = app.settings.as_mut().filter(|dialog| dialog.text_input()) {
+                if !matches!(
+                    &event,
+                    sdl2::event::Event::Quit { .. }
+                        | sdl2::event::Event::ControllerDeviceAdded { .. }
+                        | sdl2::event::Event::ControllerDeviceRemoved { .. }
+                ) {
+                    dialog.event(&event);
+                    continue;
+                }
             }
             if app.menu.is_none() {
                 if let Some(dialog) = app.advanced.as_mut().filter(|dialog| dialog.text_input()) {
@@ -1658,6 +1831,31 @@ fn main() -> Result<()> {
         }
         if let Some(action) = input.poll_direction() {
             app.action(action)?;
+        }
+        if app.ui_dirty {
+            let updated = (|| -> Result<()> {
+                painter.reconfigure(&app.config.font_path, app.config.language)?;
+                canvas
+                    .window_mut()
+                    .set_fullscreen(if app.config.fullscreen {
+                        FullscreenType::Desktop
+                    } else {
+                        FullscreenType::Off
+                    })
+                    .map_err(|error| anyhow!(error))?;
+                Ok(())
+            })();
+            if let Err(error) = updated {
+                app.status = app
+                    .config
+                    .language
+                    .format("settings_display_failed", &[&format!("{error:#}")]);
+            }
+            app.ui_dirty = false;
+        }
+        if app.clear_artwork {
+            painter.clear_media();
+            app.clear_artwork = false;
         }
         for message in rx.try_iter().take(100) {
             app.message(message, &mut painter)?;
@@ -1777,6 +1975,11 @@ mod tests {
         let gallery_requests = ArtworkLoader::new(0, api.clone(), cache, tx.clone());
         App {
             config: Config::default(),
+            config_path: PathBuf::from("/nonexistent-romstore-test/config.yaml"),
+            settings: None,
+            connection_generation: 0,
+            ui_dirty: false,
+            clear_artwork: false,
             api,
             tx,
             installer,
@@ -1830,20 +2033,113 @@ mod tests {
     #[test]
     fn back_never_quits_and_menu_owns_quit_and_independent_view_settings() {
         let mut app = app();
+        let directory = tempfile::tempdir().unwrap();
+        app.config_path = directory.path().join("config.yaml");
         assert!(app.action(Action::Back).unwrap());
         assert!(!app.quit_requested);
         app.action(Action::Menu).unwrap();
         assert!(app.menu.is_some());
+        app.action(Action::Confirm).unwrap();
+        assert!(app.settings.is_some());
         app.action(Action::Right).unwrap();
-        assert_eq!(app.config.systems_view, ViewMode::Grid);
+        assert_eq!(
+            app.settings.as_ref().unwrap().draft.systems_view,
+            ViewMode::Grid
+        );
+        assert_eq!(app.config.systems_view, ViewMode::List);
         assert_eq!(app.config.games_view, ViewMode::Grid);
         app.action(Action::Down).unwrap();
         app.action(Action::Confirm).unwrap();
+        assert_eq!(
+            app.settings.as_ref().unwrap().draft.games_view,
+            ViewMode::List
+        );
+        app.action(Action::Back).unwrap();
+        assert!(app.settings.is_none());
+        assert_eq!(app.config.systems_view, ViewMode::Grid);
         assert_eq!(app.config.games_view, ViewMode::List);
+        assert_eq!(Config::load(&app.config_path).unwrap(), app.config);
         app.action(Action::Back).unwrap();
         assert!(app.menu.is_none());
         assert!(app.action(Action::Back).unwrap());
         assert!(!choose_menu(&mut app, MenuItem::Quit));
+    }
+
+    #[test]
+    fn failed_settings_save_keeps_submenu_open_without_applying_partial_values() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut app = app();
+        app.config_path = directory.path().join("blocked/config.yaml");
+        choose_menu(&mut app, MenuItem::Settings);
+        app.settings.as_mut().unwrap().draft.games_view = ViewMode::List;
+        fs::write(directory.path().join("blocked"), b"not a directory").unwrap();
+        app.action(Action::Menu).unwrap();
+        assert!(app.settings.is_some());
+        assert!(app.settings.as_ref().unwrap().error.is_some());
+        assert_eq!(app.config.games_view, ViewMode::Grid);
+        assert_eq!(
+            fs::read(directory.path().join("blocked")).unwrap(),
+            b"not a directory"
+        );
+    }
+
+    #[test]
+    fn quitting_from_settings_saves_all_fields_first() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut app = app();
+        app.config_path = directory.path().join("config.yaml");
+        choose_menu(&mut app, MenuItem::Settings);
+        let draft = &mut app.settings.as_mut().unwrap().draft;
+        draft.language = Language::En;
+        draft.fullscreen = true;
+        draft.system_mapping.insert("gamecube".into(), "gc".into());
+        assert!(!app.action(Action::Quit).unwrap());
+        assert_eq!(Config::load(&app.config_path).unwrap(), app.config);
+        assert!(app.ui_dirty);
+    }
+
+    #[test]
+    fn queued_operations_keep_their_config_snapshot_when_server_or_paths_change() {
+        let mut app = app();
+        let (installer, requests) = mpsc::channel();
+        app.installer = installer;
+        let old_config = app.config.clone();
+        app.enqueue_job(smoke_page().items.remove(0), JobKind::Install)
+            .unwrap();
+        let config = Config {
+            server_url: "http://127.0.0.1:2".into(),
+            roms_dir: "/new-roms".into(),
+            ..old_config.clone()
+        };
+        let generation = app.connection_generation;
+        app.apply_config(config.clone(), Api::new(&config.server_url).unwrap());
+        app.enqueue_job(smoke_page().items.remove(1), JobKind::Install)
+            .unwrap();
+        let (_, _, _, _, first) = requests.try_recv().unwrap();
+        let (_, _, _, _, second) = requests.try_recv().unwrap();
+        assert_eq!(first, old_config);
+        assert_eq!(second, config);
+        assert_eq!(app.connection_generation, generation + 1);
+        assert!(app.clear_artwork);
+        assert_eq!(app.screen, Screen::Systems);
+    }
+
+    #[test]
+    fn changing_rom_paths_restarts_initial_batches_and_rejects_old_presence_results() {
+        let mut app = app();
+        app.screen = Screen::Games;
+        app.loading = true;
+        app.catalog_pending = Some(0);
+        let generation = app.catalog_generation;
+        let config = Config {
+            roms_dir: "/new-roms".into(),
+            ..app.config.clone()
+        };
+        app.apply_config(config.clone(), Api::new(&config.server_url).unwrap());
+        assert!(app.catalog_generation > generation);
+        assert_eq!(app.catalog_pending, Some(0));
+        assert!(!app.receive_games(generation, 0, Ok(smoke_page())));
+        assert!(app.page.is_none());
     }
 
     #[test]
@@ -1903,8 +2199,27 @@ mod tests {
             .position(|candidate| *candidate == item)
             .unwrap();
         let running = app.action(Action::Confirm).unwrap();
-        app.menu = None;
+        if app.settings.is_none() {
+            app.menu = None;
+        }
         running
+    }
+
+    fn configure_view(app: &mut App, systems: bool) {
+        let directory = tempfile::tempdir().unwrap();
+        let old_path =
+            std::mem::replace(&mut app.config_path, directory.path().join("config.yaml"));
+        choose_menu(app, MenuItem::Settings);
+        let draft = &mut app.settings.as_mut().unwrap().draft;
+        if systems {
+            draft.systems_view = draft.systems_view.toggled();
+        } else {
+            draft.games_view = draft.games_view.toggled();
+        }
+        app.action(Action::Menu).unwrap();
+        assert!(app.settings.is_none());
+        app.menu = None;
+        app.config_path = old_path;
     }
 
     fn reload_state() -> ReloadStatus {
@@ -2551,7 +2866,7 @@ mod tests {
         app.action(Action::Search).unwrap(); // Modal must not change its target/screen.
         assert_eq!(app.screen, Screen::Detail);
         app.action(Action::Confirm).unwrap();
-        let (_, operation, cancel) = requests.try_recv().unwrap();
+        let (_, operation, cancel, _, _) = requests.try_recv().unwrap();
         assert!(matches!(&operation, Operation::Uninstall(game) if game.path == "demo0.nes"));
         assert_eq!(app.jobs.len(), 1);
         assert_eq!(app.jobs[0].kind, JobKind::Uninstall);
@@ -2606,14 +2921,14 @@ mod tests {
         app.screen = Screen::Games;
         app.page = Some(smoke_page());
         app.game_index = 6;
-        choose_menu(&mut app, MenuItem::GamesView);
+        configure_view(&mut app, false);
         assert_eq!(app.config.games_view, ViewMode::List);
         assert_eq!(app.game_index, 6);
         app.action(Action::Down).unwrap();
         assert_eq!(app.game_index, 7);
         app.action(Action::Right).unwrap();
         assert_eq!(app.game_index, 7);
-        choose_menu(&mut app, MenuItem::GamesView);
+        configure_view(&mut app, false);
         app.action(Action::Up).unwrap();
         assert_eq!(app.game_index, 2);
         assert_eq!(app.config.systems_view, ViewMode::List);
@@ -2627,14 +2942,14 @@ mod tests {
             })
             .collect();
         app.system_index = 6;
-        choose_menu(&mut app, MenuItem::SystemsView);
+        configure_view(&mut app, true);
         assert_eq!(app.system_index, 6);
         assert_eq!(app.config.systems_view, ViewMode::Grid);
         app.action(Action::Down).unwrap();
         assert_eq!(app.system_index, 11);
         app.action(Action::Up).unwrap();
         assert_eq!(app.system_index, 6);
-        choose_menu(&mut app, MenuItem::SystemsView);
+        configure_view(&mut app, true);
         app.action(Action::Up).unwrap();
         assert_eq!(app.system_index, 5);
     }

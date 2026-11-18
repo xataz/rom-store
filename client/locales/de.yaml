@@ -1,11 +1,28 @@
 tagline: DEIN NÄCHSTES ABENTEUER WARTET
 menu_title: Menü
+settings_title: Konfiguration
+settings_help: Werte werden beim Schließen dieses Untermenüs geprüft und gespeichert.
+settings_controls: "↑ ↓: wählen · ← → / A: ändern · B / Esc / Start: speichern und zurück"
+settings_input_hint: "Konfigurationsfeld · OK: bestätigen · B: Eingabe abbrechen · Leer: optional"
+settings_saved: "Konfiguration in {0} gespeichert"
+settings_display_failed: "Konfiguration gespeichert, Anzeige nicht aktualisiert: {0}"
+settings_enabled: Aktiviert
+settings_disabled: Deaktiviert
+settings_unset: Automatisch / nicht gesetzt
+settings_save_close: Speichern und zurück zum Menü
+settings_reload: Datei neu laden (Änderungen verwerfen)
+settings_remove: Entfernen
+settings_add_mapping: Plattformzuordnung hinzufügen
+settings_add_argument: Programm / Argument hinzufügen
+settings_executable: Programm
+settings_argument: Argument
+numeric_keyboard_hint: Ziffernblock · Alphabetische Zeichen werden nicht akzeptiert
 menu_shortcut: Start / Esc · Menü
 menu_systems_view: Konsolenansicht
 menu_games_view: ROM-Ansicht
 menu_reload: Serverkatalog neu laden
 menu_refresh: Frontend-Spiele aktualisieren
-menu_controls: "↑ ↓: wählen · ← → / A: ändern · A: öffnen · B / Rücktaste: schließen"
+menu_controls: "↑ ↓: wählen · A / Enter: öffnen · B / Esc / Start: schließen"
 back_key: Rücktaste / B
 download_notification: "Download {0} / {1}"
 refresh_running: Frontend wird aktualisiert…

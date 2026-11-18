@@ -4,7 +4,7 @@ cache_dir: "/userdata/system/cache/romstore"
 # Langue de l'interface : fr (français), en (anglais), es (espagnol), de (allemand).
 language: fr
 # Vues initiales : grid (jaquettes) ou list (liste avec détails).
-# V / clic stick droit change la vue pendant la session, sans réécrire ce fichier.
+# Menu Start/Échap > Configuration : réglages enregistrés à la fermeture du sous-menu.
 games_view: grid
 systems_view: list
 # Frontend local : none, batocera, esde (ou es-de), recalbox, emulationstation, custom.
