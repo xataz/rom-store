@@ -390,6 +390,8 @@ Avec `--config`, le client charge et sauvegarde exactement le fichier indiqué. 
 |---|---|---|
 | Naviguer | Croix ou stick gauche | Flèches |
 | Choisir / ouvrir la fiche / valider son action | Bouton principal, SDL A | Entrée |
+| Activer la multisélection / cocher un jeu | Maintenir SDL A (~650 ms) | Maintenir Entrée |
+| Télécharger les jeux cochés (mode sélection uniquement) | SDL X | Espace |
 | Rechercher des jeux | Clic stick gauche, SDL L3 | F |
 | Aller directement à une lettre | R1 (bouton d'épaule droit SDL) | L |
 | Retour (ne quitte jamais l'application) | Bouton secondaire, SDL B | Retour arrière |
@@ -416,7 +418,23 @@ Le client masque les plateformes dont le compteur `game_count` est à zéro
 (compteur de jeux installables publié par le serveur), au démarrage comme après
 chaque actualisation. Le catalogue et les compteurs de la WebUI serveur ne changent pas.
 
-La grille comporte **5 colonnes** et deux lignes visibles, avec la jaquette et le nom dessous. Le jeu sélectionné est encadré ; haut/bas changent de ligne et gauche/droite de vignette. La liste se parcourt avec haut/bas et affiche à droite jaquette, capture, description, développeur et joueurs. Dans les deux vues, **A / Entrée ouvre toujours la fiche**, sans lancer d'installation. Une nouvelle validation **depuis la fiche** lance l'installation si le jeu est absent, ou propose sa désinstallation s'il est déjà présent. Une opération en attente ou en cours ne peut pas être ajoutée en double ; l'installation des formats non pris en charge reste bloquée.
+La grille comporte **5 colonnes** et deux lignes visibles, avec la jaquette et le nom dessous. Le jeu sélectionné est encadré ; haut/bas changent de ligne et gauche/droite de vignette. La liste se parcourt avec haut/bas et affiche à droite jaquette, capture, description, développeur et joueurs. Hors multisélection, un **appui court sur A / Entrée ouvre la fiche au relâchement**, sans lancer d'installation. Une nouvelle validation **depuis la fiche** lance l'installation si le jeu est absent, ou propose sa désinstallation s'il est déjà présent. Une opération en attente ou en cours ne peut pas être ajoutée en double ; l'installation des formats non pris en charge reste bloquée.
+
+### Télécharger plusieurs ROMs
+
+Dans la grille ou la liste des jeux, **maintenir A / Entrée environ 650 ms** active la multisélection et coche le jeu courant, sans ouvrir sa fiche. Ensuite, **A / Entrée** coche ou décoche chaque jeu. Un compteur et des cases indiquent la sélection ; **X / Espace** ajoute les jeux cochés à la file dans l'ordre de sélection. Les téléchargements sont exécutés un par un par le worker existant, pas simultanément. **B / Retour arrière** annule la sélection sans quitter le catalogue ni arrêter les téléchargements déjà lancés.
+
+Les jeux non installables, déjà présents localement ou déjà en file ne sont pas ajoutés. Leur état est revérifié au lancement du lot pour éviter les doublons. Les coches reposent sur les identifiants des jeux : elles restent valables pendant le défilement, le changement de vue et le saut « **Allez à la lettre** ». Une nouvelle recherche, une réindexation ou un changement de serveur ou de dossiers ROMs annule la sélection devenue potentiellement obsolète. Une erreur de communication avec le worker conserve les jeux qui n'ont pas encore été ajoutés.
+
+### Quitter pendant les téléchargements
+
+L'entrée **Quitter** du menu et la fermeture de fenêtre demandent désormais confirmation s'il reste des opérations actives/en attente, ou un refresh en cours. **Continuer les téléchargements est sélectionné par défaut** : A/Entrée, B, Échap ou Start permettent de revenir sans annuler les tâches. Pour quitter réellement, choisir explicitement **Annuler et quitter** avec droite/bas puis valider. Les transferts sont alors annulés ; les écritures locales déjà engagées terminent leur phase de publication/restauration avant de libérer l'application. Répéter la fermeture de fenêtre ne vaut pas confirmation.
+
+### Espace disque avant téléchargement
+
+Avant les transferts de chaque jeu, le client vérifie l'espace libre via les API natives (`fs2`, Unix/macOS/Linux et Windows), sans lancer `df`, PowerShell ou une autre commande système. Il additionne les fichiers manquants **par volume**, même si ROMs, médias et gamelists utilisent différents dossiers d'un même disque. Les disques réellement séparés sont contrôlés séparément. Les fichiers déjà présents et vérifiés ne sont pas comptés une seconde fois.
+
+Le calcul tient compte des unités d'allocation, du remplacement XML, de sa sauvegarde, du journal et d'une **marge de 16 Mio par volume**. L'espace est de nouveau contrôlé juste avant la requête HTTP de chaque fichier. Si l'espace manque ou ne peut pas être interrogé, aucun transfert de ce fichier n'est lancé ; la file affiche le volume, la quantité nécessaire et la quantité disponible lorsqu'elles sont connues. Le contrôle porte sur chaque installation lorsqu'elle démarre, pas sur une réservation préalable de tout le lot : un jeu ultérieur peut être refusé si les précédents ont rempli le disque. Un autre programme peut toujours consommer de l'espace pendant un transfert ; les erreurs d'écriture restent gérées sans écraser les fichiers existants.
 
 Le catalogue utilise un **défilement infini**, sans pages à changer : à l'approche de la fin des jeux chargés, le client récupère automatiquement le lot suivant en arrière-plan. La sélection et les jeux déjà visibles restent accessibles pendant ce chargement. Le compteur indique la position dans le catalogue complet ; en cas d'erreur réseau, continuer à défiler relance le chargement. Les lots sont toujours limités à 50 jeux côté API, sans téléchargement intégral au démarrage. Seules les jaquettes proches de la sélection sont gardées en mémoire (20 maximum).
 
@@ -622,7 +640,7 @@ SDL_VIDEODRIVER=dummy client/target/debug/romstore-client \
   --smoke-test --screenshots .romstore/screenshots
 ```
 
-Le test SDL couvre 40 scènes : vues grille/liste, défilement, fiches, médias manquants, file et notification de téléchargement, erreurs et chargements, recherche globale/locale et avancée, claviers textuels/numériques, désinstallation, sélecteur alphabétique, menu et sous-menu Configuration (défilement, correspondances de plateformes, arguments de commande, port, erreur de validation). Les captures PNG sont facultatives et écrites uniquement avec `--screenshots`. Ce test couvre l'initialisation et le rendu, pas l'ergonomie ou une manette physique. Les tests Rust couvrent également la sauvegarde et la relecture de tous les réglages, les conflits et erreurs d'écriture, et les installations déjà en file lors d'un changement de configuration.
+Le test SDL couvre 46 scènes : vues grille/liste, défilement, fiches, médias manquants, file et notification de téléchargement, erreurs et chargements, recherches, claviers textuels/numériques, désinstallation, sélecteur alphabétique, menu, sous-menu Configuration, multisélection, confirmation de fermeture et manque d'espace disque. Les captures PNG sont facultatives et écrites uniquement avec `--screenshots`. Ce test couvre l'initialisation et le rendu, pas l'ergonomie ou une manette physique. Les tests Rust couvrent aussi la persistance des réglages, les appuis courts/longs, les lots, la confirmation sans annulation prématurée et les contrôles d'espace avant tout téléchargement.
 
 ## Limites de cette version
 

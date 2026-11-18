@@ -46,7 +46,25 @@ filter_publisher: Herausgeber
 filter_rating: Bewertung (0–1)
 filter_any: Beliebig
 filter_value: Filterwert
-alphabet_jump: Buchstabe
+alphabet_jump: Zum Buchstaben
+multi_select: Spiele auswählen
+selection_hold_key: A / Enter halten
+selection_download_key: Leertaste / X
+selection_download: Auswahl herunterladen
+selection_batch_hint: "X / Leertaste: herunterladen"
+selection_toggle: Markieren / abwählen
+selection_count: "Ausgewählt: {0}"
+selection_status: "{0} Spiele ausgewählt · A: markieren/abwählen · X / Leertaste: herunterladen · B: abbrechen"
+selection_unavailable: Nur installierbare, fehlende und noch nicht eingereihte Spiele sind auswählbar.
+selection_empty: Vor dem Herunterladen mindestens ein Spiel auswählen.
+selection_queued: "{0} Downloads eingereiht · {1} Spiele übersprungen (vorhanden oder eingereiht)"
+selection_failed: "{0} Downloads eingereiht; übrige Auswahl beibehalten: {1}"
+quit_confirm_title: Anwendung beenden?
+quit_confirm_body: "Laufende oder wartende Vorgänge: {0}. Beenden bricht Übertragungen ab; bereits begonnene lokale Schreibvorgänge werden vor dem Schließen abgeschlossen."
+quit_confirm_refresh: Das Frontend wird aktualisiert. Das Schließen wartet auf den Abschluss. Beenden?
+quit_continue: Downloads fortsetzen
+quit_stop: Abbrechen und beenden
+disk_space_failed: "Zu wenig Speicher auf {0}: {1} MiB benötigt, {2} MiB verfügbar (inklusive Reserve)"
 alphabet_title: Direkt zu einem Buchstaben springen
 alphabet_controls: "↑ ↓ ← →: wählen · Enter / A: bestätigen · Rücktaste / B: abbrechen · Tastatur: Buchstabe"
 alphabet_missing: "Kein Name beginnt mit {0}."

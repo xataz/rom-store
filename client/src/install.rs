@@ -267,6 +267,24 @@ pub fn install_configured(
     cancel: &AtomicBool,
     progress: impl Fn(Progress),
 ) -> Result<()> {
+    install_with_space(
+        api,
+        config,
+        manifest,
+        cancel,
+        progress,
+        crate::space::snapshot,
+    )
+}
+
+fn install_with_space(
+    api: &Api,
+    config: &Config,
+    manifest: &Manifest,
+    cancel: &AtomicBool,
+    progress: impl Fn(Progress),
+    probe: impl Fn(&Path) -> Result<crate::space::Snapshot>,
+) -> Result<()> {
     validate_manifest(manifest)?;
     let layout = Layout::new(config, &manifest.system)?;
     let system = &layout.system;
@@ -312,25 +330,38 @@ pub fn install_configured(
     }
     // Validate the existing XML before transferring any large file.
     let baseline = read_xml(&layout.gamelist.join("gamelist.xml"))?;
-    merge_local_xml(baseline.as_deref(), manifest, layout.media.is_some())?;
+    let merged = merge_local_xml(baseline.as_deref(), manifest, layout.media.is_some())?;
     let total: u64 = pending.iter().map(|(f, _, _)| f.size).sum();
-    // Do not require room for the large ROM on a separate media-only disk.
-    let mut required = BTreeMap::<&Path, u64>::new();
-    required.insert(&layout.gamelist, 0);
-    required.insert(&state, 0);
-    for (file, root, _) in &pending {
-        *required.entry(root.as_path()).or_default() += file.size;
+    let journal_bytes = serde_json::to_vec_pretty(manifest)?;
+    // Include XML replacement, its retained backup and the recovery journal.
+    // Destination parents can themselves be mount points: inspect the real target,
+    // rather than assuming every child belongs to its configured root's volume.
+    let mut required = vec![
+        (layout.gamelist.clone(), merged.len() as u64),
+        (
+            state.clone(),
+            baseline.as_ref().map_or(0, |bytes| bytes.len() as u64),
+        ),
+        (state.clone(), journal_bytes.len() as u64),
+    ];
+    for (file, _, target) in &pending {
+        required.push((
+            target
+                .parent()
+                .context("Répertoire cible absent")?
+                .to_path_buf(),
+            file.size,
+        ));
     }
-    for (root, bytes) in required {
-        if fs2::available_space(root)? < bytes.saturating_add(16 * 1024 * 1024) {
-            bail!("Espace disque insuffisant (marge de 16 Mio incluse)");
-        }
-    }
+    crate::space::ensure(required, &probe)?;
+    drop(merged);
+    drop(baseline);
 
     let journal_path = state.join(format!("{}.json", manifest.game_id));
     existing_regular(&journal_path)?;
     let mut journal = NamedTempFile::new_in(&state)?;
-    serde_json::to_writer_pretty(&mut journal, manifest)?;
+    journal.write_all(&journal_bytes)?;
+    drop(journal_bytes);
     journal.as_file().sync_all()?;
     journal.persist(&journal_path)?;
     sync_directory(&state)?;
@@ -339,6 +370,18 @@ pub fn install_configured(
     let mut staged = Vec::new();
     for (file, target_root, target) in pending {
         cancelled(cancel)?;
+        // Available space can change after the initial check (another process,
+        // another queued install): refuse before opening this file's HTTP request.
+        crate::space::ensure(
+            vec![(
+                target
+                    .parent()
+                    .context("Répertoire cible absent")?
+                    .to_path_buf(),
+                file.size,
+            )],
+            &probe,
+        )?;
         // Stage on the destination filesystem for atomic publication across mounts.
         let mut temporary = tempfile::Builder::new()
             .prefix(".romstore-download-")
@@ -431,8 +474,18 @@ pub fn install_configured(
 }
 
 pub(crate) fn sync_directory(path: &Path) -> Result<()> {
-    fs::File::open(path)?.sync_all()?;
-    Ok(())
+    #[cfg(unix)]
+    {
+        fs::File::open(path)?.sync_all()?;
+        Ok(())
+    }
+    // Rust's ordinary File::open cannot open a directory on Windows. The file
+    // contents are already flushed before each atomic rename/publication.
+    #[cfg(windows)]
+    {
+        let _ = path;
+        Ok(())
+    }
 }
 
 pub(crate) fn read_xml(path: &Path) -> Result<Option<Vec<u8>>> {
@@ -654,6 +707,77 @@ mod tests {
                 sha256: hex::encode(Sha256::digest(b"rom")),
             }],
         }
+    }
+
+    #[test]
+    fn insufficient_space_stops_before_any_payload_download_or_journal_publication() {
+        let root = tempfile::tempdir().unwrap();
+        let config = Config {
+            roms_dir: root.path().into(),
+            ..Config::default()
+        };
+        let api = Api::new("http://127.0.0.1:1").unwrap();
+        let error = install_with_space(
+            &api,
+            &config,
+            &manifest(),
+            &AtomicBool::new(false),
+            |_| panic!("No transfer should start"),
+            |_| {
+                Ok(crate::space::Snapshot {
+                    volume: "disk".into(),
+                    available: 0,
+                    allocation: 4096,
+                })
+            },
+        )
+        .unwrap_err();
+        assert!(error
+            .downcast_ref::<crate::space::InsufficientSpace>()
+            .is_some());
+        assert!(!root.path().join("nes/games/demo.nes").exists());
+        assert!(!root.path().join("nes/gamelist.xml").exists());
+        assert!(!root
+            .path()
+            .join(format!("nes/.romstore/{}.json", "a".repeat(64)))
+            .exists());
+    }
+
+    #[test]
+    fn space_is_checked_again_immediately_before_the_http_file_request() {
+        use std::cell::Cell;
+        let root = tempfile::tempdir().unwrap();
+        let config = Config {
+            roms_dir: root.path().into(),
+            ..Config::default()
+        };
+        let api = Api::new("http://127.0.0.1:1").unwrap();
+        let calls = Cell::new(0);
+        let error = install_with_space(
+            &api,
+            &config,
+            &manifest(),
+            &AtomicBool::new(false),
+            |_| panic!("No transfer should start"),
+            |_| {
+                calls.set(calls.get() + 1);
+                Ok(crate::space::Snapshot {
+                    volume: "disk".into(),
+                    available: if calls.get() <= 4 { u64::MAX } else { 0 },
+                    allocation: 1,
+                })
+            },
+        )
+        .unwrap_err();
+        assert!(error
+            .downcast_ref::<crate::space::InsufficientSpace>()
+            .is_some());
+        assert_eq!(calls.get(), 5);
+        assert!(!root.path().join("nes/games/demo.nes").exists());
+        assert!(root
+            .path()
+            .join(format!("nes/.romstore/{}.json", "a".repeat(64)))
+            .exists());
     }
 
     #[test]

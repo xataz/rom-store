@@ -130,7 +130,71 @@ impl App {
         if self.uninstall_confirmation.is_some() {
             self.draw_uninstall_confirmation(canvas, painter)?;
         }
+        if self.quit_confirmation.is_some() {
+            self.draw_quit_confirmation(canvas, painter)?;
+        }
         Ok(())
+    }
+
+    fn draw_quit_confirmation(&self, canvas: &mut Scene, painter: &mut Painter) -> Result<()> {
+        let Some(confirmation) = &self.quit_confirmation else {
+            return Ok(());
+        };
+        let l = self.config.language;
+        let pending = self.jobs.iter().filter(|job| !job.done).count();
+        ui::dim(canvas, 220)?;
+        ui::panel(canvas, Rect::new(200, 155, 880, 420), true)?;
+        painter.text(
+            canvas,
+            l.text("quit_confirm_title"),
+            (236, 182),
+            30,
+            TEXT,
+            808,
+        )?;
+        painter.paragraph(
+            canvas,
+            &if pending == 0 && self.frontend_refreshing {
+                l.text("quit_confirm_refresh").to_owned()
+            } else {
+                l.format("quit_confirm_body", &[&pending])
+            },
+            (236, 253),
+            808,
+            4,
+        )?;
+        for (x, selected, label, color) in [
+            (
+                236,
+                !confirmation.confirmed,
+                l.text("quit_continue"),
+                ACCENT,
+            ),
+            (654, confirmation.confirmed, l.text("quit_stop"), DANGER),
+        ] {
+            ui::rounded(
+                canvas,
+                Rect::new(x, 445, 390, 54),
+                10,
+                if selected { color } else { SURFACE },
+            )?;
+            painter.text(
+                canvas,
+                label,
+                (x + 20, 458),
+                21,
+                if selected { ui::BG } else { color },
+                350,
+            )?;
+        }
+        painter.text(
+            canvas,
+            l.text("uninstall_confirm_controls"),
+            (236, 529),
+            15,
+            MUTED,
+            808,
+        )
     }
 
     fn draw_uninstall_confirmation(&self, canvas: &mut Scene, painter: &mut Painter) -> Result<()> {
@@ -470,7 +534,14 @@ impl App {
             (1010, 133),
             MUTED,
         )?;
-        if self.catalog_pending.is_some() {
+        if self.selection.enabled {
+            painter.pill(
+                canvas,
+                &l.format("selection_count", &[&self.selection.games.len()]),
+                (780, 139),
+                GOLD,
+            )?;
+        } else if self.catalog_pending.is_some() {
             painter.text(canvas, l.text("loading_more"), (780, 145), 13, ACCENT, 210)?;
         }
         if self.config.games_view == ViewMode::List {
@@ -499,6 +570,18 @@ impl App {
             }
             if game.installed {
                 painter.pill(canvas, "✓", (x + 188, y + 12), ACCENT)?;
+            }
+            if self.selection.enabled {
+                painter.pill(
+                    canvas,
+                    if self.selection.contains(&game.id) {
+                        "☑"
+                    } else {
+                        "□"
+                    },
+                    (x + 12, y + 12),
+                    GOLD,
+                )?;
             }
             painter.text(
                 canvas,
@@ -550,7 +633,18 @@ impl App {
         if let Some(game) = page.items.get(self.game_index) {
             ui::rounded(canvas, Rect::new(40, 582, 1200, 40), 10, SURFACE)?;
             painter.text(canvas, &game.name, (56, 589), 21, TEXT, 850)?;
-            painter.text(canvas, l.text("quick_actions"), (930, 595), 14, MUTED, 294)?;
+            painter.text(
+                canvas,
+                l.text(if self.selection.enabled {
+                    "selection_batch_hint"
+                } else {
+                    "quick_actions"
+                }),
+                (930, 595),
+                14,
+                MUTED,
+                294,
+            )?;
         }
         Ok(())
     }
@@ -565,13 +659,28 @@ impl App {
             let y = 184 + (index - start) as i32 * 48;
             let selected = index == self.game_index;
             ui::panel(canvas, Rect::new(40, y, 456, 43), selected)?;
+            if self.selection.enabled {
+                painter.text(
+                    canvas,
+                    if self.selection.contains(&game.id) {
+                        "☑"
+                    } else {
+                        "□"
+                    },
+                    (56, y + 9),
+                    21,
+                    GOLD,
+                    26,
+                )?;
+            }
             painter.text(
                 canvas,
                 &game.name,
-                (56, y + 10),
+                (if self.selection.enabled { 88 } else { 56 }, y + 10),
                 18,
                 if selected { ACCENT } else { TEXT },
-                if game.installed { 382 } else { 424 },
+                (if game.installed { 382 } else { 424 })
+                    - if self.selection.enabled { 32 } else { 0 },
             )?;
             if game.installed {
                 painter.text(canvas, "✓", (458, y + 10), 20, ACCENT, 26)?;
@@ -655,7 +764,11 @@ impl App {
             )?;
             painter.text(
                 canvas,
-                l.text("quick_actions"),
+                l.text(if self.selection.enabled {
+                    "selection_batch_hint"
+                } else {
+                    "quick_actions"
+                }),
                 (544, 593),
                 15,
                 if game.installable { ACCENT } else { GOLD },
@@ -942,6 +1055,7 @@ impl App {
         )?;
         ui::rounded(canvas, Rect::new(40, 665, 1200, 1), 0, BORDER)?;
         let label = match self.screen {
+            Screen::Games if self.selection.enabled => l.text("selection_toggle"),
             Screen::Games => l.text("details"),
             Screen::Queue => l.text("cancel"),
             Screen::Detail if self.detail.as_ref().is_some_and(|game| game.installed) => {
@@ -951,9 +1065,33 @@ impl App {
             Screen::Systems => l.text("choose"),
         };
         let x = painter.hint(canvas, l.text("enter_key"), label, 40)?;
-        let mut x = painter.hint(canvas, l.text("back_key"), l.text("back"), x)?;
+        let selecting = self.screen == Screen::Games && self.selection.enabled;
+        let mut x = painter.hint(
+            canvas,
+            l.text("back_key"),
+            l.text(if selecting { "cancel" } else { "back" }),
+            x,
+        )?;
+        if selecting {
+            x = painter.hint(
+                canvas,
+                l.text("selection_download_key"),
+                l.text("selection_download"),
+                x,
+            )?;
+            painter.hint(canvas, "L / R1", l.text("alphabet_jump"), x)?;
+            return Ok(());
+        }
         if matches!(self.screen, Screen::Systems | Screen::Games) {
             x = painter.hint(canvas, "F / L3", l.text("search"), x)?;
+            if self.screen == Screen::Games {
+                x = painter.hint(
+                    canvas,
+                    l.text("selection_hold_key"),
+                    l.text("multi_select"),
+                    x,
+                )?;
+            }
             painter.hint(canvas, "L / R1", l.text("alphabet_jump"), x)?;
         }
         Ok(())

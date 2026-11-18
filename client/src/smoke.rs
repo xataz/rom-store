@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub const SCENES: usize = 40;
+pub const SCENES: usize = 46;
 
 fn media(id: char, role: &str) -> File {
     File {
@@ -107,6 +107,8 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
     app.loading = false;
     app.reloading = false;
     app.uninstall_confirmation = None;
+    app.quit_confirmation = None;
+    app.selection.clear();
     app.alphabet = None;
     app.menu = None;
     app.settings = None;
@@ -472,6 +474,49 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
             }
             app.settings = Some(dialog);
         }
+        40 | 41 => {
+            app.screen = Screen::Games;
+            app.config.games_view = if frame == 40 {
+                ViewMode::Grid
+            } else {
+                ViewMode::List
+            };
+            let page = app.page.as_ref().unwrap();
+            app.selection.toggle(page.items[1].clone());
+            app.selection.toggle(page.items[3].clone());
+            app.status = l.format("selection_status", &[&2]);
+        }
+        42 | 43 => {
+            if frame == 42 {
+                app.jobs.push(Job {
+                    kind: JobKind::Install,
+                    game_id: "9".repeat(64),
+                    name: "Les voyageurs de l'aube".into(),
+                    cancel: Arc::new(AtomicBool::new(false)),
+                    state: l.text("in_progress").into(),
+                    done: false,
+                    succeeded: false,
+                    started: Some(Instant::now()),
+                    progress: None,
+                });
+            }
+            app.quit_confirmation = Some(crate::QuitConfirmation {
+                confirmed: frame == 43,
+            });
+        }
+        44 => {
+            app.screen = Screen::Queue;
+            app.queue_index = app.jobs.len() - 1;
+            let job = app.jobs.last_mut().unwrap();
+            job.done = true;
+            job.state = l.format("disk_space_failed", &[&"/userdata/roms", &"8192", &"1024"]);
+            app.status = job.state.clone();
+        }
+        45 => {
+            app.screen = Screen::Games;
+            app.selection.enabled = true;
+            app.status = l.text("selection_empty").into();
+        }
         _ => unreachable!(),
     }
     Ok([
@@ -515,5 +560,11 @@ pub fn prepare(app: &mut App, painter: &mut Painter, frame: usize) -> Result<&'s
         "settings-command",
         "settings-port-keypad",
         "settings-validation-error",
+        "multi-selection-grid",
+        "multi-selection-list",
+        "quit-confirm-continue",
+        "quit-confirm-stop",
+        "insufficient-disk-space",
+        "multi-selection-empty",
     ][frame])
 }

@@ -5,6 +5,7 @@ mod fonts;
 mod input;
 mod menu;
 mod search;
+mod selection;
 mod settings;
 mod smoke;
 mod ui;
@@ -95,6 +96,11 @@ type InstallRequest = (usize, Operation, Arc<AtomicBool>, Api, Config);
 
 struct UninstallConfirmation {
     game: Game,
+    confirmed: bool,
+}
+
+#[derive(Default)]
+struct QuitConfirmation {
     confirmed: bool,
 }
 
@@ -200,6 +206,8 @@ struct App {
     jobs: Vec<Job>,
     status: String,
     quit_requested: bool,
+    quit_confirmation: Option<QuitConfirmation>,
+    selection: selection::Selection,
     catalog_system: Option<String>,
     search_query: String,
     search: Option<SearchDialog>,
@@ -295,6 +303,7 @@ impl App {
                 return;
             }
         };
+        self.selection.clear();
         let selected = self
             .systems
             .get(self.system_index)
@@ -451,6 +460,7 @@ impl App {
     }
 
     fn games(&mut self) {
+        self.selection.clear();
         self.generation += 1;
         self.catalog_generation += 1;
         self.page = None;
@@ -698,7 +708,7 @@ impl App {
         }
         let cancel = Arc::new(AtomicBool::new(false));
         let id = self.jobs.len();
-        self.jobs.push(Job {
+        let job = Job {
             kind,
             game_id: game.id.clone(),
             name: if kind == JobKind::Uninstall {
@@ -712,20 +722,133 @@ impl App {
             succeeded: false,
             started: None,
             progress: None,
-        });
+        };
         let operation = match kind {
             JobKind::Install => Operation::Install(game.id),
             JobKind::Uninstall => Operation::Uninstall(Box::new(game)),
         };
         self.installer
             .send((id, operation, cancel, self.api.clone(), self.config.clone()))?;
+        self.jobs.push(job);
         self.status = self.config.language.text("queued_hint").into();
         Ok(())
+    }
+
+    fn catalogue_input_active(&self) -> bool {
+        self.screen == Screen::Games
+            && !self.loading
+            && !self.quit_requested
+            && self.menu.is_none()
+            && self.settings.is_none()
+            && self.search.is_none()
+            && self.alphabet.is_none()
+            && self.advanced.is_none()
+            && self.uninstall_confirmation.is_none()
+            && self.quit_confirmation.is_none()
+    }
+
+    fn toggle_selected(&mut self) {
+        let Some(mut game) = self.selected_game().cloned() else {
+            return;
+        };
+        if self.selection.contains(&game.id) {
+            self.selection.toggle(game);
+        } else {
+            game.installed = self.config.rom_exists(&game.system, &game.path);
+            if !game.installable
+                || game.installed
+                || self
+                    .jobs
+                    .iter()
+                    .any(|job| job.game_id == game.id && !job.done)
+            {
+                self.status = self.config.language.text("selection_unavailable").into();
+                return;
+            }
+            self.selection.toggle(game);
+        }
+        self.status = self
+            .config
+            .language
+            .format("selection_status", &[&self.selection.games.len()]);
+    }
+
+    fn download_selected(&mut self) {
+        if self.frontend_refreshing {
+            self.status = self.config.language.text("refresh_running").into();
+            return;
+        }
+        if self.selection.games.is_empty() {
+            self.status = self.config.language.text("selection_empty").into();
+            return;
+        }
+        let mut selected: VecDeque<_> = std::mem::take(&mut self.selection.games).into();
+        let mut added = 0;
+        let mut skipped = 0;
+        while let Some(game) = selected.pop_front() {
+            if !game.installable
+                || self.config.rom_exists(&game.system, &game.path)
+                || self
+                    .jobs
+                    .iter()
+                    .any(|job| job.game_id == game.id && !job.done)
+            {
+                skipped += 1;
+                continue;
+            }
+            if let Err(error) = self.enqueue_job(game.clone(), JobKind::Install) {
+                self.selection.games = std::iter::once(game).chain(selected).collect();
+                self.status = self
+                    .config
+                    .language
+                    .format("selection_failed", &[&added, &format!("{error:#}")]);
+                return;
+            }
+            added += 1;
+        }
+        self.selection.clear();
+        self.status = self
+            .config
+            .language
+            .format("selection_queued", &[&added, &skipped]);
+    }
+
+    fn begin_shutdown(&mut self) -> bool {
+        self.quit_confirmation = None;
+        if self.jobs.iter().all(|job| job.done) && !self.frontend_refreshing {
+            return false;
+        }
+        self.quit_requested = true;
+        for job in &self.jobs {
+            job.cancel.store(true, Ordering::Relaxed);
+        }
+        self.screen = Screen::Queue;
+        self.status = self.config.language.text("closing").into();
+        true
     }
 
     fn action(&mut self, action: Action) -> Result<bool> {
         if self.quit_requested {
             return Ok(self.frontend_refreshing || self.jobs.iter().any(|job| !job.done));
+        }
+        if self.quit_confirmation.is_some() {
+            match action {
+                Action::Left | Action::Up => {
+                    self.quit_confirmation.as_mut().unwrap().confirmed = false
+                }
+                Action::Right | Action::Down => {
+                    self.quit_confirmation.as_mut().unwrap().confirmed = true
+                }
+                Action::Back | Action::Menu => self.quit_confirmation = None,
+                Action::Confirm => {
+                    let confirmation = self.quit_confirmation.take().unwrap();
+                    if confirmation.confirmed {
+                        return Ok(self.begin_shutdown());
+                    }
+                }
+                _ => (),
+            }
+            return Ok(true);
         }
         if self.settings.is_some() {
             if matches!(action, Action::Menu | Action::Quit) {
@@ -794,18 +917,19 @@ impl App {
             self.menu = None;
             self.advanced = None;
             self.uninstall_confirmation = None;
-            if self.jobs.iter().all(|job| job.done) && !self.frontend_refreshing {
-                return Ok(false);
+            if self.jobs.iter().any(|job| !job.done) || self.frontend_refreshing {
+                self.quit_confirmation = Some(QuitConfirmation::default());
+                return Ok(true);
             }
-            self.quit_requested = true;
-            for job in &self.jobs {
-                job.cancel.store(true, Ordering::Relaxed);
-            }
-            self.screen = Screen::Queue;
-            self.status = self.config.language.text("closing").into();
-            return Ok(true);
+            return Ok(false);
         }
         match action {
+            Action::Select if self.catalogue_input_active() => self.toggle_selected(),
+            Action::DownloadSelection
+                if self.catalogue_input_active() && self.selection.enabled =>
+            {
+                self.download_selected()
+            }
             Action::Alphabet
                 if matches!(self.screen, Screen::Systems | Screen::Games) && !self.loading =>
             {
@@ -820,6 +944,9 @@ impl App {
             }
             Action::Search if matches!(self.screen, Screen::Systems | Screen::Games) => {
                 self.open_search()
+            }
+            Action::Back if self.screen == Screen::Games && self.selection.enabled => {
+                self.selection.clear()
             }
             Action::Back => match self.screen {
                 Screen::Queue => self.screen = self.before_queue,
@@ -901,6 +1028,7 @@ impl App {
                         self.systems();
                     }
                 }
+                Screen::Games if !self.loading && self.selection.enabled => self.toggle_selected(),
                 Screen::Games if !self.loading => self.open_detail(),
                 Screen::Queue => {
                     if let Some(job) = self.jobs.get_mut(self.queue_index).filter(|job| !job.done) {
@@ -1112,13 +1240,27 @@ impl App {
                     if job.cancel.load(Ordering::Relaxed) {
                         self.config.language.text("cancelled_hint").into()
                     } else {
+                        let detail = if let Some(space) =
+                            error.downcast_ref::<romstore_client::space::InsufficientSpace>()
+                        {
+                            self.config.language.format(
+                                "disk_space_failed",
+                                &[
+                                    &space.path.display(),
+                                    &format!("{:.2}", space.required as f64 / 1048576.0),
+                                    &format!("{:.2}", space.available as f64 / 1048576.0),
+                                ],
+                            )
+                        } else {
+                            format!("{error:#}")
+                        };
                         self.config.language.format(
                             if job.kind == JobKind::Uninstall {
                                 "uninstall_failed"
                             } else {
                                 "install_failed"
                             },
-                            &[&format!("{error:#}")],
+                            &[&detail],
                         )
                     }
                 }
@@ -1242,6 +1384,9 @@ impl App {
             || config.font_path != self.config.font_path
             || config.fullscreen != self.config.fullscreen;
         self.config = config;
+        if server_changed || library_changed {
+            self.selection.clear();
+        }
         if server_changed || cache_changed {
             self.api = api;
             self.gallery_cancel.store(true, Ordering::Relaxed);
@@ -1719,6 +1864,8 @@ fn main() -> Result<()> {
         jobs: Vec::new(),
         status: String::new(),
         quit_requested: false,
+        quit_confirmation: None,
+        selection: selection::Selection::default(),
         catalog_system: None,
         search_query: String::new(),
         search: None,
@@ -1758,6 +1905,17 @@ fn main() -> Result<()> {
             }
         }
         for event in events.poll_iter() {
+            if let Some(action) = input.catalogue_event(&event, app.catalogue_input_active()) {
+                if let Some(action) = action {
+                    if action == Action::Confirm && !app.selection.enabled {
+                        painter.set_art(None)?;
+                    }
+                    if !app.action(action)? {
+                        break 'running;
+                    }
+                }
+                continue;
+            }
             if matches!(
                 &event,
                 sdl2::event::Event::KeyDown {
@@ -1830,6 +1988,9 @@ fn main() -> Result<()> {
             }
         }
         if let Some(action) = input.poll_direction() {
+            app.action(action)?;
+        }
+        if let Some(action) = input.poll_confirm(app.catalogue_input_active()) {
             app.action(action)?;
         }
         if app.ui_dirty {
@@ -2007,6 +2168,8 @@ mod tests {
             jobs: Vec::new(),
             status: String::new(),
             quit_requested: false,
+            quit_confirmation: None,
+            selection: selection::Selection::default(),
             catalog_system: None,
             search_query: String::new(),
             search: None,
@@ -2163,6 +2326,10 @@ mod tests {
         assert_eq!(app.jobs.len(), 1);
         app.jobs[0].done = true;
         assert!(app.action(Action::Quit).unwrap());
+        assert!(app.quit_confirmation.is_some());
+        assert!(!app.quit_requested);
+        app.action(Action::Right).unwrap();
+        app.action(Action::Confirm).unwrap();
         assert!(app.quit_requested);
         app.frontend_refreshing = false;
         assert!(!app.action(Action::Quit).unwrap());
@@ -2362,11 +2529,112 @@ mod tests {
             progress: None,
         });
         assert!(app.action(Action::Quit).unwrap());
+        assert!(app.quit_confirmation.is_some());
+        assert!(!app.quit_requested);
+        assert!(!cancel.load(Ordering::Relaxed));
+        app.action(Action::Right).unwrap();
+        app.action(Action::Confirm).unwrap();
         assert!(app.quit_requested);
         assert!(cancel.load(Ordering::Relaxed));
         assert_eq!(app.screen, Screen::Queue);
         app.jobs[0].done = true;
         assert!(!app.action(Action::Quit).unwrap());
+    }
+
+    #[test]
+    fn multi_selection_only_queues_on_explicit_batch_action_in_both_views() {
+        for view in [ViewMode::Grid, ViewMode::List] {
+            let mut app = app();
+            app.screen = Screen::Games;
+            app.config.games_view = view;
+            app.page = Some(smoke_page());
+            let (installer, requests) = mpsc::channel();
+            app.installer = installer;
+            app.action(Action::Select).unwrap();
+            assert!(app.selection.enabled);
+            assert_eq!(app.screen, Screen::Games);
+            assert_eq!(app.selection.games.len(), 1);
+            app.action(Action::Confirm).unwrap();
+            assert!(app.selection.games.is_empty());
+            app.action(Action::Confirm).unwrap();
+            app.game_index = 1;
+            app.action(Action::Confirm).unwrap();
+            assert_eq!(app.selection.games.len(), 2);
+            app.game_index = 2; // Unsupported game: never select or uninstall it.
+            app.action(Action::Confirm).unwrap();
+            assert_eq!(app.selection.games.len(), 2);
+            assert!(app.jobs.is_empty());
+            assert!(requests.try_recv().is_err());
+            app.action(Action::DownloadSelection).unwrap();
+            assert_eq!(app.jobs.len(), 2);
+            assert!(!app.selection.enabled);
+            for index in 0..2 {
+                assert!(
+                    matches!(requests.try_recv().unwrap().1, Operation::Install(id) if id == format!("{index:064x}"))
+                );
+            }
+            assert!(requests.try_recv().is_err());
+        }
+    }
+
+    #[test]
+    fn batch_rechecks_local_presence_and_duplicate_jobs_and_retains_failed_sends() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir(root.path().join("nes")).unwrap();
+        let mut app = app();
+        app.config.roms_dir = root.path().into();
+        app.screen = Screen::Games;
+        app.page = Some(smoke_page());
+        let (installer, requests) = mpsc::channel();
+        app.installer = installer;
+        app.action(Action::Select).unwrap();
+        app.game_index = 1;
+        app.action(Action::Confirm).unwrap();
+        fs::write(root.path().join("nes/demo0.nes"), b"installed elsewhere").unwrap();
+        app.enqueue_job(smoke_page().items.remove(1), JobKind::Install)
+            .unwrap();
+        app.action(Action::DownloadSelection).unwrap();
+        assert_eq!(app.jobs.len(), 1);
+        assert!(requests.try_recv().is_ok());
+        assert!(requests.try_recv().is_err());
+        fs::remove_file(root.path().join("nes/demo0.nes")).unwrap();
+        app.game_index = 0;
+        app.action(Action::Select).unwrap();
+        drop(requests);
+        assert!(app.action(Action::DownloadSelection).unwrap());
+        assert_eq!(
+            app.jobs.len(),
+            1,
+            "A disconnected worker must not leave a phantom job"
+        );
+        assert_eq!(app.selection.games.len(), 1);
+        assert!(app.selection.enabled);
+        app.action(Action::Back).unwrap();
+        assert!(!app.selection.enabled);
+        assert_eq!(app.screen, Screen::Games);
+    }
+
+    #[test]
+    fn quitting_defaults_to_continue_and_never_cancels_before_explicit_confirmation() {
+        let mut app = app();
+        let (installer, _requests) = mpsc::channel();
+        app.installer = installer;
+        app.enqueue_job(smoke_page().items.remove(0), JobKind::Install)
+            .unwrap();
+        for cancel_action in [Action::Confirm, Action::Back, Action::Menu] {
+            app.action(Action::Quit).unwrap();
+            assert!(!app.quit_confirmation.as_ref().unwrap().confirmed);
+            app.action(Action::Quit).unwrap(); // Repeated window-close is not consent.
+            assert!(!app.quit_requested);
+            assert!(!app.jobs[0].cancel.load(Ordering::Relaxed));
+            app.action(cancel_action).unwrap();
+            assert!(app.quit_confirmation.is_none());
+            assert!(!app.jobs[0].cancel.load(Ordering::Relaxed));
+        }
+        app.action(Action::Quit).unwrap();
+        app.jobs[0].done = true; // Completion while the question is open is safe too.
+        app.action(Action::Right).unwrap();
+        assert!(!app.action(Action::Confirm).unwrap());
     }
 
     #[test]

@@ -46,7 +46,25 @@ filter_publisher: Éditeur
 filter_rating: Note (0–1)
 filter_any: Indifférent
 filter_value: Valeur du filtre
-alphabet_jump: Lettre
+alphabet_jump: Allez à la lettre
+multi_select: Sélectionner
+selection_hold_key: A long / Entrée longue
+selection_download_key: Espace / X
+selection_download: Télécharger la sélection
+selection_batch_hint: "X / Espace : télécharger"
+selection_toggle: Cocher / décocher
+selection_count: "Sélection : {0}"
+selection_status: "{0} jeux sélectionnés · A : cocher/décocher · X / Espace : télécharger · B : annuler"
+selection_unavailable: Seuls les jeux installables, absents et non déjà en file peuvent être sélectionnés.
+selection_empty: Sélectionnez au moins un jeu avant de lancer les téléchargements.
+selection_queued: "{0} téléchargements ajoutés à la file · {1} jeux ignorés (déjà présents ou en file)"
+selection_failed: "{0} téléchargements ajoutés ; sélection restante conservée : {1}"
+quit_confirm_title: Quitter l'application ?
+quit_confirm_body: "Opérations en cours ou en attente : {0}. Quitter annulera les transferts ; les écritures locales déjà commencées seront terminées avant la fermeture."
+quit_confirm_refresh: Un refresh est en cours. La fermeture attendra sa fin. Voulez-vous quitter ?
+quit_continue: Continuer les téléchargements
+quit_stop: Annuler et quitter
+disk_space_failed: "Espace insuffisant sur {0} : {1} Mio nécessaires, {2} Mio disponibles (marge incluse)"
 alphabet_title: Aller directement à une lettre
 alphabet_controls: "↑ ↓ ← → : choisir · Entrée / A : valider · Retour / B : annuler · Clavier : lettre directe"
 alphabet_missing: "Aucun nom ne commence par {0}."

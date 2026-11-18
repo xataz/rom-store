@@ -20,3 +20,6 @@ tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "time"] }
 serde-saphyr = { version = "2.1", default-features = false, features = ["deserialize", "serialize"] }
 xmltree = { version = "0.11", features = ["attribute-order"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }

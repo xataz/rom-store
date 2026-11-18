@@ -46,7 +46,25 @@ filter_publisher: Publisher
 filter_rating: Rating (0–1)
 filter_any: Any
 filter_value: Filter value
-alphabet_jump: Letter
+alphabet_jump: Go to letter
+multi_select: Select games
+selection_hold_key: Hold A / Enter
+selection_download_key: Space / X
+selection_download: Download selection
+selection_batch_hint: "X / Space: download"
+selection_toggle: Check / uncheck
+selection_count: "Selected: {0}"
+selection_status: "{0} games selected · A: check/uncheck · X / Space: download · B: cancel"
+selection_unavailable: Only installable, missing games that are not already queued can be selected.
+selection_empty: Select at least one game before starting downloads.
+selection_queued: "{0} downloads queued · {1} games skipped (already present or queued)"
+selection_failed: "{0} downloads queued; remaining selection retained: {1}"
+quit_confirm_title: Quit the application?
+quit_confirm_body: "Running or queued operations: {0}. Quitting will cancel transfers; local writes already started will finish before closing."
+quit_confirm_refresh: A frontend refresh is running. Closing will wait for it to finish. Quit?
+quit_continue: Continue downloads
+quit_stop: Cancel and quit
+disk_space_failed: "Insufficient space on {0}: {1} MiB required, {2} MiB available (margin included)"
 alphabet_title: Jump to a letter
 alphabet_controls: "↑ ↓ ← →: choose · Enter / A: confirm · Backspace / B: cancel · Keyboard: type a letter"
 alphabet_missing: "No name starts with {0}."
