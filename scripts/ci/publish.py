@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publie un composant via l'API Forgejo après l'envoi de son archive et du SHA256."""
+"""Publie un composant avec archive, SHA256 et notes issues de l'historique Git."""
 
 import json
 import os
@@ -9,6 +9,7 @@ from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 import uuid
 
+from changelog import release_notes
 from package import ROOT, validate_tag
 
 
@@ -48,6 +49,11 @@ def publish(root, server, repository, tag, sha, token):
         raise ValueError("Cette release existe déjà : aucune modification effectuée. "
                          "Supprimer le brouillon incomplet avant de relancer, le cas échéant.")
 
+    notes = release_notes(root, server, repository, tag)
+    changelog = output / "CHANGELOG.md"
+    changelog.write_text(notes, encoding="utf-8")
+    files.append(changelog)
+
     release = request("POST", payload={
         "tag_name": tag,
         "target_commitish": sha,
@@ -56,7 +62,7 @@ def publish(root, server, repository, tag, sha, token):
                 + ("Client : SDL2 2.26+ et police système nécessaires. " if crate == "client" else "")
                 + "Binaire dynamique compilé sous Debian 12 (glibc 2.36+).\n\n"
                 "Vérification : `sha256sum -c SHA256SUMS`. "
-                "Voir `docs/ci.md` dans les archives pour les instructions.",
+                "Voir `docs/ci.md` dans les archives pour les instructions.\n\n" + notes,
         "draft": True,
         "prerelease": "-" in version,
     })

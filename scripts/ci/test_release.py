@@ -26,6 +26,9 @@ class ReleaseTests(unittest.TestCase):
             path.chmod(0o755)
         for name in ("README.md", "docs/ci.md", "docs/server.md", "client/config.example.yaml"):
             self.write(name, b"Demo\n")
+        notes = patch("publish.release_notes", return_value="## Modifications\n\n- Démo des nouveautés\n")
+        self.notes = notes.start()
+        self.addCleanup(notes.stop)
 
     def write(self, name, content):
         path = self.root / name
@@ -82,12 +85,12 @@ class ReleaseTests(unittest.TestCase):
         package(self.root, "client-v0.1.0")
         responses = [HTTPError("url", 404, "not found", {}, None)]
         responses += [io.BytesIO(json.dumps(value).encode()) for value in (
-            {"id": 42}, {"id": 1}, {"id": 2}, {"draft": False},
+            {"id": 42}, {"id": 1}, {"id": 2}, {"id": 3}, {"draft": False},
         )]
         with patch("publish.urlopen", side_effect=responses) as api:
             self.do_publish()
         requests = [call.args[0] for call in api.call_args_list]
-        self.assertEqual([req.method for req in requests], ["GET", "POST", "POST", "POST", "PATCH"])
+        self.assertEqual([req.method for req in requests], ["GET", "POST", "POST", "POST", "POST", "PATCH"])
         self.assertTrue(json.loads(requests[1].data)["draft"])
         self.assertEqual(json.loads(requests[1].data)["name"], "ROM Store Client 0.1.0")
         self.assertFalse(json.loads(requests[1].data)["prerelease"])
@@ -95,6 +98,13 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn(b'name="attachment"', requests[2].data)
         self.assertIn(b"romstore-client-0.1.0", requests[2].data)
         self.assertIn(b"SHA256SUMS", requests[3].data)
+        self.assertIn("Démo des nouveautés", json.loads(requests[1].data)["body"])
+        self.assertIn(b"CHANGELOG.md", requests[4].data)
+        self.assertIn("Démo des nouveautés".encode(), requests[4].data)
+        self.assertEqual((self.root / "dist/client-v0.1.0/CHANGELOG.md").read_text(),
+                         self.notes.return_value)
+        self.notes.assert_called_once_with(self.root, "https://codeberg.org", "owner/repo",
+                                           "client-v0.1.0")
 
     def test_server_prerelease_publishes_only_server_assets(self):
         self.write("server/Cargo.toml", b'[package]\nversion = "0.5.0-rc.1"\n')
@@ -102,7 +112,7 @@ class ReleaseTests(unittest.TestCase):
         package(self.root, tag)
         responses = [HTTPError("url", 404, "not found", {}, None)]
         responses += [io.BytesIO(json.dumps(value).encode()) for value in (
-            {"id": 42}, {"id": 1}, {"id": 2}, {"draft": False},
+            {"id": 42}, {"id": 1}, {"id": 2}, {"id": 3}, {"draft": False},
         )]
         with patch("publish.urlopen", side_effect=responses) as api:
             self.do_publish(tag)
@@ -113,7 +123,8 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn("SDL2", metadata["body"])
         self.assertIn(b"romstore-server-0.5.0-rc.1", requests[2].data)
         self.assertIn(b"SHA256SUMS", requests[3].data)
-        self.assertEqual(len(requests), 5)
+        self.assertIn(b"CHANGELOG.md", requests[4].data)
+        self.assertEqual(len(requests), 6)
 
     def test_upload_failure_leaves_release_as_draft(self):
         package(self.root, "client-v0.1.0")
@@ -130,6 +141,34 @@ class ReleaseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "existe déjà"):
                 self.do_publish()
         self.assertEqual(api.call_count, 1)
+        self.notes.assert_not_called()
+        self.assertFalse((self.root / "dist/client-v0.1.0/CHANGELOG.md").exists())
+
+    def test_incomplete_history_prevents_release_creation(self):
+        package(self.root, "client-v0.1.0")
+        self.notes.side_effect = ValueError("Historique Git incomplet")
+        missing = HTTPError("url", 404, "not found", {}, None)
+        self.addCleanup(missing.close)
+        with patch("publish.urlopen", side_effect=missing) as api:
+            with self.assertRaisesRegex(ValueError, "incomplet"):
+                self.do_publish()
+        self.assertEqual(api.call_count, 1)
+
+    def test_changelog_upload_failure_keeps_the_release_as_draft(self):
+        package(self.root, "client-v0.1.0")
+        missing = HTTPError("url", 404, "not found", {}, None)
+        failed = HTTPError("url", 500, "changelog upload failed", {}, None)
+        self.addCleanup(missing.close)
+        self.addCleanup(failed.close)
+        responses = [missing]
+        responses += [io.BytesIO(json.dumps(value).encode()) for value in (
+            {"id": 42}, {"id": 1}, {"id": 2},
+        )]
+        responses.append(failed)
+        with patch("publish.urlopen", side_effect=responses) as api:
+            with self.assertRaises(HTTPError):
+                self.do_publish()
+        self.assertNotIn("PATCH", [call.args[0].method for call in api.call_args_list])
 
     def test_missing_asset_prevents_any_api_call(self):
         with patch("publish.urlopen") as api:

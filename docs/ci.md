@@ -67,8 +67,10 @@ Sur un **push de tag `client-v…` ou `server-v…`**, après ces vérifications
 
 1. Vérification du tag : il doit correspondre à la version du **seul composant ciblé**.
 2. Vérification du binaire ELF64 x86_64, puis création de son archive.
-3. Création d'une release en **brouillon** et téléversement de l'archive et de `SHA256SUMS`.
-4. Publication uniquement une fois tous les fichiers envoyés. Un tag avec suffixe
+3. Génération des notes depuis l'historique Git et création d'un fichier `CHANGELOG.md`.
+4. Création d'une release en **brouillon**, avec les notes dans sa description,
+   et téléversement de l'archive, de `SHA256SUMS` et de `CHANGELOG.md`.
+5. Publication uniquement une fois tous les fichiers envoyés. Un tag avec suffixe
    comme `client-v0.2.0-rc.1` produit une prérelease.
 
 Un lancement manuel, même sur un tag, ne publie pas de release. Une pull request
@@ -157,12 +159,43 @@ Après réussite, la release Codeberg contient :
 ```text
 romstore-client-0.1.0-linux-x86_64.tar.gz
 SHA256SUMS
+CHANGELOG.md
 ```
 
 Pour le serveur, utiliser par exemple `server-v0.1.3`, avec `package.version = "0.1.3"`
 dans `server/Cargo.toml`. Sa release contiendra uniquement
-`romstore-server-0.1.3-linux-x86_64.tar.gz` et son propre `SHA256SUMS`.
+`romstore-server-0.1.3-linux-x86_64.tar.gz`, son propre `SHA256SUMS` et `CHANGELOG.md`.
 Les archives locales sont isolées dans `dist/client-v…/` et `dist/server-v…/`.
+
+### Notes de release automatiques
+
+La description de la release et son fichier joint **`CHANGELOG.md`** présentent :
+
+- le précédent tag du **même composant**, parmi les ancêtres du tag publié
+  (`client-v…` pour le client, `server-v…` pour le serveur, y compris les préreleases) ;
+- un lien Codeberg pour comparer les deux versions ;
+- tous les commits de cet intervalle, du plus ancien au plus récent, avec leur
+  titre, le détail du message lorsqu'il existe et un lien vers chaque commit.
+
+Le générateur compare les tags, pas la date de création des releases dans l'interface
+Codeberg. Les tags d'une branche non fusionnée et les tags de l'autre composant ne
+servent pas de référence. Les commits ne sont pas filtrés par répertoire : les
+changements partagés, de documentation et de CI restent visibles. Les commits faits
+après le tag publié ne sont jamais inclus. Les titres sont échappés et les détails
+sont présentés comme du texte pour ne pas interpréter le Markdown/HTML des messages.
+
+Pour la première release d'un composant, l'historique complet jusqu'au tag est
+présenté, avec une mention explicite. Si deux tags pointent sur le même commit,
+les notes indiquent qu'il n'y a pas de nouveau commit.
+
+Le checkout CI utilise **`fetch-depth: 0`** pour récupérer l'historique et les tags.
+Un dépôt superficiel ou un tag inaccessible bloque la publication au lieu de créer
+des notes incomplètes. Le changelog est calculé localement, sans service externe ;
+il est écrit dans `dist/<tag>/CHANGELOG.md` par l'étape de publication, et non dans
+l'archive binaire. `SHA256SUMS` continue de vérifier cette archive uniquement.
+
+Comme les autres fichiers, le changelog doit être envoyé avec succès avant de
+publier le brouillon. Une release déjà existante n'est pas modifiée.
 
 Chaque archive contient un dossier versionné avec le binaire et la documentation ;
 celle du client inclut aussi `config.example.yaml`. Aucune configuration privée,

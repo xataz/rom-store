@@ -74,6 +74,8 @@ jobs:
         uses: https://code.forgejo.org/actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+          # Les notes comparent le tag courant au précédent tag du même composant.
+          fetch-depth: 0
 
       - name: Cache des dépendances Cargo
         uses: https://code.forgejo.org/actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
