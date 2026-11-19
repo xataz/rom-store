@@ -49,7 +49,7 @@ quality:
   stage: units-test
   script:
     - cargo install cargo2junit
-    - cargo test -p romstore-${CRATE_NAME} --all-targets -- --format=json -Z unstable-options | .cargo/bin/cargo2junit > junit.xml
+    - cargo test -p romstore-${CRATE_NAME} --all-targets -- --format=json | .cargo/bin/cargo2junit > junit.xml
   artifacts:
     when: always
     reports:
