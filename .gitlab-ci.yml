@@ -18,13 +18,10 @@ variables:
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
 
 default:
-  image: rust:1.100
-  before_script:
-    - apt update && apt install cmake -y
+  image: xataze/roms-store-builder
   cache:
     key: cargo
     paths:
-      - .cargo/bin/
       - .cargo/registry/
       - .cargo/git/
       - target/
@@ -32,13 +29,10 @@ default:
 quality:
   stage: quality
   script:
-    - rustup component add rustfmt clippy
-    - |
-      [ ! -e .cargo/bin/gitlab-clippy ] && cargo install gitlab_clippy
     - cargo check --workspace --all-targets
     - cargo fmt --all -- --check
     - cargo clippy --workspace --all-targets --message-format=json -- -D warnings > clippy.json
-    - .cargo/bin/gitlab-clippy < clippy.json > gl-code-quality-report.json
+    - gitlab-clippy < clippy.json > gl-code-quality-report.json
   artifacts:
     when: always
     reports:
@@ -49,8 +43,6 @@ quality:
 .units-test-template:
   stage: units-test
   script:
-    - |
-      [ ! -e .cargo/bin/cargo-nextest ] && cargo install cargo-nextest
     - cargo nextest run -p romstore-${CRATE_NAME} --profile ci --config-file .cargo/nextest.toml
   artifacts:
     when: always
@@ -74,46 +66,6 @@ units-test:server:
 
 .build-template:
   stage: build
-  before_script:
-    - apt update
-    - apt install -y build-essential clang lld cmake ninja-build pkg-config
-    - |
-      case "${RELEASE_TARGET}" in
-        "x86_64-unknown-linux-musl")
-          apt install -y musl musl-tools
-        ;;
-        "aarch64-unknown-linux-gnu")
-          apt install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross
-        ;;
-        "armv7-unknown-linux-gnueabihf")
-          apt install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libc6-dev-armhf-cross 
-        ;;
-        "arm-unknown-linux-gnueabihf")
-          apt install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libc6-dev-armhf-cross 
-        ;;
-        "armv5te-unknown-linux-gnueabi")
-          apt install -y gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi libc6-dev-armel-cross
-        ;;
-        "x86_64-pc-windows-gnu")
-          apt install -y mingw-w64 gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64
-        ;;
-      esac
-    - rustup target add "${RELEASE_TARGET}"
-  variables:
-    CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
-    AR_aarch64_unknown_linux_gnu: aarch64-linux-gnu-ar
-    CC_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-gcc
-    AR_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-ar
-    CC_arm_unknown_linux_gnueabihf: arm-linux-gnueabihf-gcc
-    AR_arm_unknown_linux_gnueabihf: arm-linux-gnueabihf-ar
-    CFLAGS_arm_unknown_linux_gnueabihf: "-march=armv6 -mfpu=vfp -mfloat-abi=hard"
-    CC_armv5te_unknown_linux_gnueabi: arm-linux-gnueabi-gcc
-    AR_armv5te_unknown_linux_gnueabi: arm-linux-gnueabi-ar
-    CFLAGS_armv5te_unknown_linux_gnueabi: "-march=armv5te -mfloat-abi=soft"
-    CC_aarch64_pc_windows_gnullvm: aarch64-w64-mingw32-clang
-    AR_aarch64_pc_windows_gnullvm: llvm-ar
-    CC_x86_64_pc_windows_gnu: x86_64-w64-mingw32-gcc
-    AR_x86_64_pc_windows_gnu: x86_64-w64-mingw32-ar
   script:
     - cargo build -p romstore-${CRATE_NAME} --release --target ${RELEASE_TARGET}
   artifacts:
@@ -162,7 +114,6 @@ build:server:windows:x86_64:
 .release-template:
   stage: release
   before_script:
-    - cargo install cargo-release
     - git config user.name "FramaGit CI"
     - git config user.email "framagit@xataz.net"
     - git remote set-url origin "https://oauth2:${GITLAB_RELEASE_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
