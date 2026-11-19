@@ -130,15 +130,34 @@ build:client:windows:x86_64:
         - .gitlab-ci.yml
       when: manual
 
-release:
+release:client:patch:
   extends: .release-template
-  parallel:
-    matrix:
-      - RELEASE_NAME:
-          - client
-          - server
-        RELEASE_LEVEL:
-          - patch
-          - minor
-          - major
+  variables:
+    RELEASE_NAME: client
+    RELEASE_LEVEL: patch
+release:client:minor:
+  extends: .release-template
+  variables:
+    RELEASE_NAME: client
+    RELEASE_LEVEL: minor
+release:client:major:
+  extends: .release-template
+  variables:
+    RELEASE_NAME: client
+    RELEASE_LEVEL: major
 
+release:server:patch:
+  extends: .release-template
+  variables:
+    RELEASE_NAME: server
+    RELEASE_LEVEL: patch
+release:server:minor:
+  extends: .release-template
+  variables:
+    RELEASE_NAME: server
+    RELEASE_LEVEL: minor
+release:server:major:
+  extends: .release-template
+  variables:
+    RELEASE_NAME: server
+    RELEASE_LEVEL: major

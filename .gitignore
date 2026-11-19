@@ -16,3 +16,5 @@ roms/
 fixtures/
 client/target/
 server/target/
+gl-code-quality-report.json
+junit.xml
