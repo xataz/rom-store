@@ -1,4 +1,5 @@
 stages:
+  - prepare
   - quality
   - units-test
   - build
@@ -23,6 +24,7 @@ default:
   cache:
     key: cargo
     paths:
+      - .cargo/bin/
       - .cargo/registry/
       - .cargo/git/
       - target/
@@ -31,14 +33,27 @@ quality:
   stage: quality
   script:
     - rustup component add rustfmt clippy
+    - cargo install gitlab_clippy
     - cargo check --workspace --all-targets
     - cargo fmt --all -- --check
-    - cargo clippy --workspace --all-targets -- -D warnings
+    - cargo clippy --workspace --all-targets --message-format=json -- -D warnings > clippy.json
+    - gitlab-clippy < clippy.json > gl-code-quality-report.json
+  artifacts:
+    when: always
+    reports:
+      codequality: gl-code-quality-report.json
+    paths:
+      - gl-code-quality-report.json
 
 .units-test-template:
   stage: units-test
   script:
-    - cargo test -p romstore-${CRATE_NAME} --all-targets
+    - cargo install cargo2junit
+    - cargo test -p romstore-${CRATE_NAME} --all-targets -- --format=json -Z unstable-options | cargo2junit > junit.xml
+  artifacts:
+    when: always
+    reports:
+      junit: junit.xml
   rules:
     - changes:
         - ${CRATE_NAME}/**/*
