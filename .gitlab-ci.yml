@@ -89,27 +89,27 @@ build:server:linux:x86_64:
     CRATE_NAME: server
     RELEASE_TARGET: x86_64-unknown-linux-gnu
   
-build:client:linux:x86_64-musl:
-  extends: .build-template
-  variables:
-    CRATE_NAME: client
-    RELEASE_TARGET: x86_64-unknown-linux-musl
-build:server:linux:x86_64-musl:
-  extends: .build-template
-  variables:
-    CRATE_NAME: server
-    RELEASE_TARGET: x86_64-unknown-linux-musl
+#build:client:linux:x86_64-musl:
+#  extends: .build-template
+#  variables:
+#    CRATE_NAME: client
+#    RELEASE_TARGET: x86_64-unknown-linux-musl
+#build:server:linux:x86_64-musl:
+#  extends: .build-template
+#  variables:
+#    CRATE_NAME: server
+#    RELEASE_TARGET: x86_64-unknown-linux-musl
 
 build:client:windows:x86_64:
   extends: .build-template
   variables:
     CRATE_NAME: client
     RELEASE_TARGET: x86_64-pc-windows-gnu
-build:server:windows:x86_64:
-  extends: .build-template
-  variables:
-    CRATE_NAME: server
-    RELEASE_TARGET: x86_64-pc-windows-gnu
+#build:server:windows:x86_64:
+#  extends: .build-template
+#  variables:
+#    CRATE_NAME: server
+#    RELEASE_TARGET: x86_64-pc-windows-gnu
 
 .release-template:
   stage: release
