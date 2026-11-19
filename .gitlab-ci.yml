@@ -51,7 +51,7 @@ quality:
   script:
     - |
       [ ! -e .cargo/bin/cargo-nextest ] && cargo install cargo-nextest
-    - cargo nextest run --profile ci
+    - cargo nextest run -p romstore-${CRATE_NAME} --profile ci --config-file .cargo/nextest.toml
   artifacts:
     when: always
     reports:
