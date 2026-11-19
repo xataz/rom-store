@@ -50,8 +50,8 @@ quality:
   stage: units-test
   script:
     - |
-      [ ! -e .cargo/bin/cargo2junit ] && cargo install cargo2junit
-    - cargo test -p romstore-${CRATE_NAME} --all-targets -- --format=json | .cargo/bin/cargo2junit > junit.xml
+      [ ! -e .cargo/bin/cargo-nextest ] && cargo install cargo-nextest
+    - cargo nextest run --profile ci
   artifacts:
     when: always
     reports:
