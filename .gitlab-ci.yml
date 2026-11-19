@@ -31,6 +31,7 @@ quality:
   stage: quality
   script:
     - rustup component add rustfmt clippy
+    - cargo check --workspace --all-targets
     - cargo fmt --all -- --check
     - cargo clippy --workspace --all-targets -- -D warnings
 
@@ -80,8 +81,7 @@ units-test:server:
           apt install -y mingw-w64 gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64
         ;;
       esac
-    - rustup target add \
-        ${RELEASE_TARGET}
+    - rustup target add "${RELEASE_TARGET}"
   variables:
     CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
     AR_aarch64_unknown_linux_gnu: aarch64-linux-gnu-ar
