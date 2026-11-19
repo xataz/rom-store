@@ -6,6 +6,12 @@ stages:
   - release
   - publish
 
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_TITLE =~ /^chore\(release\)/
+      when: never
+    - when: always
+
 variables:
   CARGO_TERM_COLOR: always
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
@@ -50,11 +56,51 @@ units-test:server:
 
 .build-template:
   stage: build
+  before_script:
+    - apt update
+    - apt install -y build-essential clang lld cmake ninja-build pkg-config
+    - |
+      case "${RELEASE_TARGET}" in
+        "x86_64-unknown-linux-musl")
+          apt install -y musl musl-tools
+        ;;
+        "aarch64-unknown-linux-gnu")
+          apt install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross
+        ;;
+        "armv7-unknown-linux-gnueabihf")
+          apt install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libc6-dev-armhf-cross 
+        ;;
+        "arm-unknown-linux-gnueabihf")
+          apt install -y gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libc6-dev-armhf-cross 
+        ;;
+        "armv5te-unknown-linux-gnueabi")
+          apt install -y gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi libc6-dev-armel-cross
+        ;;
+      esac
+    - apt install -y 
+    mingw-w64 
+    - rustup target add \
+        ${RELEASE_TARGET}
+  variables:
+    CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+    AR_aarch64_unknown_linux_gnu: aarch64-linux-gnu-ar
+    CC_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-gcc
+    AR_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-ar
+    CC_arm_unknown_linux_gnueabihf: arm-linux-gnueabihf-gcc
+    AR_arm_unknown_linux_gnueabihf: arm-linux-gnueabihf-ar
+    CFLAGS_arm_unknown_linux_gnueabihf: "-march=armv6 -mfpu=vfp -mfloat-abi=hard"
+    CC_armv5te_unknown_linux_gnueabi: arm-linux-gnueabi-gcc
+    AR_armv5te_unknown_linux_gnueabi: arm-linux-gnueabi-ar
+    CFLAGS_armv5te_unknown_linux_gnueabi: "-march=armv5te -mfloat-abi=soft"
+    CC_aarch64_pc_windows_gnullvm: aarch64-w64-mingw32-clang
+    AR_aarch64_pc_windows_gnullvm: llvm-ar
+    CC_x86_64_pc_windows_gnu: x86_64-w64-mingw32-gcc
+    AR_x86_64_pc_windows_gnu: x86_64-w64-mingw32-ar
   script:
-    - cargo build -p romstore-${CRATE_NAME} --release
+    - cargo build -p romstore-${CRATE_NAME} --release --target ${RELEASE_TARGET}
   artifacts:
     paths:
-      - target/release/romstore-${CRATE_NAME}
+      - target/release/${RELEASE_TARGET}/romstore-${CRATE_NAME}
   rules:
     - changes:
         - ${CRATE_NAME}/**/*
@@ -62,15 +108,39 @@ units-test:server:
         - Cargo.lock
         - .gitlab-ci.yml
 
-build:client:
+build:client:linux:x86_64:
   extends: .build-template
   variables:
     CRATE_NAME: client
-build:server:
+    RELEASE_TARGET: x86_64-unknown-linux-gnu
+build:server:linux:x86_64:
   extends: .build-template
   variables:
     CRATE_NAME: server
+    RELEASE_TARGET: x86_64-unknown-linux-gnu
   
+build:client:linux:x86_64-musl:
+  extends: .build-template
+  variables:
+    CRATE_NAME: client
+    RELEASE_TARGET: x86_64-unknown-linux-musl
+build:server:linux:x86_64-musl:
+  extends: .build-template
+  variables:
+    CRATE_NAME: server
+    RELEASE_TARGET: x86_64-unknown-linux-musl
+
+build:client:windows:x86_64:
+  extends: .build-template
+  variables:
+    CRATE_NAME: client
+    RELEASE_TARGET: x86_64-pc-windows-gnu
+build:server:windows:x86_64:
+  extends: .build-template
+  variables:
+    CRATE_NAME: server
+    RELEASE_TARGET: x86_64-pc-windows-gnu
+
 .release-template:
   stage: release
   before_script:
@@ -78,6 +148,7 @@ build:server:
     - git config user.name "FramaGit CI"
     - git config user.email "framagit@xataz.net"
     - git remote set-url origin "https://oauth2:${GITLAB_RELEASE_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+    - git checkout -B "$CI_COMMIT_REF_NAME" "$CI_COMMIT_SHA"
   script:
     - cargo release -p "romstore-${CRATE_NAME}" "${RELEASE_LEVEL}" --execute
   rules:
