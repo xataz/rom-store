@@ -6,6 +6,7 @@ __pycache__/
 target/
 dist/
 .romstore/
+.cargo/
 *.sqlite3*
 client/config.toml
 client/config.yaml

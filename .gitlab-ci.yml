@@ -15,15 +15,17 @@ workflow:
 
 variables:
   CARGO_TERM_COLOR: always
-  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+#  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
 
 default:
-  image: xataze/roms-store-builder
+  image: xataze/roms-store-builder:latest
+  # before_script:
+  #   - cp /opt/cargo/config.toml .cargo/config.toml
   cache:
     key: cargo
     paths:
-      - .cargo/registry/
-      - .cargo/git/
+      - /opt/cargo/registry/
+      - /opt/cargo/git/
       - target/
 
 quality:
@@ -43,14 +45,14 @@ quality:
 .units-test-template:
   stage: units-test
   script:
-    - cargo nextest run -p romstore-${CRATE_NAME} --profile ci --config-file .cargo/nextest.toml
+    - cargo nextest run -p romstore-${RELEASE_NAME} --profile ci --config-file nextest.toml
   artifacts:
     when: always
     reports:
       junit: junit.xml
   rules:
     - changes:
-        - ${CRATE_NAME}/**/*
+        - ${RELEASE_NAME}/**/*
         - Cargo.toml
         - Cargo.lock
         - .gitlab-ci.yml
@@ -58,22 +60,22 @@ quality:
 units-test:client:
   extends: .units-test-template
   variables:
-    CRATE_NAME: client
+    RELEASE_NAME: client
 units-test:server:
   extends: .units-test-template
   variables:
-    CRATE_NAME: server
+    RELEASE_NAME: server
 
 .build-template:
   stage: build
   script:
-    - cargo build -p romstore-${CRATE_NAME} --release --target ${RELEASE_TARGET}
+    - cargo build -p romstore-${RELEASE_NAME} --release --target ${RELEASE_TARGET}
   artifacts:
     paths:
-      - target/release/${RELEASE_TARGET}/romstore-${CRATE_NAME}
+      - target/release/${RELEASE_TARGET}/romstore-${RELEASE_NAME}
   rules:
     - changes:
-        - ${CRATE_NAME}/**/*
+        - ${RELEASE_NAME}/**/*
         - Cargo.toml
         - Cargo.lock
         - .gitlab-ci.yml
@@ -81,49 +83,48 @@ units-test:server:
 build:client:linux:x86_64:
   extends: .build-template
   variables:
-    CRATE_NAME: client
+    RELEASE_NAME: client
     RELEASE_TARGET: x86_64-unknown-linux-gnu
 build:server:linux:x86_64:
   extends: .build-template
   variables:
-    CRATE_NAME: server
+    RELEASE_NAME: server
     RELEASE_TARGET: x86_64-unknown-linux-gnu
   
 #build:client:linux:x86_64-musl:
 #  extends: .build-template
 #  variables:
-#    CRATE_NAME: client
+#    RELEASE_NAME: client
 #    RELEASE_TARGET: x86_64-unknown-linux-musl
 #build:server:linux:x86_64-musl:
 #  extends: .build-template
 #  variables:
-#    CRATE_NAME: server
+#    RELEASE_NAME: server
 #    RELEASE_TARGET: x86_64-unknown-linux-musl
 
 build:client:windows:x86_64:
   extends: .build-template
   variables:
-    CRATE_NAME: client
+    RELEASE_NAME: client
     RELEASE_TARGET: x86_64-pc-windows-gnu
 #build:server:windows:x86_64:
 #  extends: .build-template
 #  variables:
-#    CRATE_NAME: server
+#    RELEASE_NAME: server
 #    RELEASE_TARGET: x86_64-pc-windows-gnu
 
 .release-template:
   stage: release
-  before_script:
+  script:
     - git config user.name "FramaGit CI"
     - git config user.email "framagit@xataz.net"
     - git remote set-url origin "https://oauth2:${GITLAB_RELEASE_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
     - git checkout -B "$CI_COMMIT_REF_NAME" "$CI_COMMIT_SHA"
-  script:
-    - cargo release -p "romstore-${CRATE_NAME}" "${RELEASE_LEVEL}" --execute
+    - cargo release -p "romstore-${RELEASE_NAME}" "${RELEASE_LEVEL}" --execute
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       changes:
-        - ${CRATE_NAME}/**/*
+        - ${RELEASE_NAME}/**/*
         - Cargo.toml
         - Cargo.lock
         - .gitlab-ci.yml
@@ -133,7 +134,7 @@ release:
   extends: .release-template
   parallel:
     matrix:
-      - CRATE_NAME:
+      - RELEASE_NAME:
           - client
           - server
         RELEASE_LEVEL:
