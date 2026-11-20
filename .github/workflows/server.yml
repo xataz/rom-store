@@ -1,0 +1,82 @@
+name: Workflow server
+
+on:
+  push:
+    paths:
+      - server/**/*
+      - Cargo.toml
+      - Cargo.lock
+      - .github/**/*
+  pull_request:
+    paths:
+      - server/**/*
+      - Cargo.toml
+      - Cargo.lock
+      - .github/**/*
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  quality:
+    if: |
+      !(
+        github.ref_name == github.event.repository.default_branch &&
+        startsWith(github.event.head_commit.message, 'chore(release)')
+      )
+    runs-on: ubuntu-latest
+    container: xataze/roms-store-builder:latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
+        with:
+          key: cargo-${{ runner.os }}-quality-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            cargo-${{ runner.os }}-quality-${{ hashFiles('Cargo.lock') }}-
+            cargo-${{ runner.os }}-quality-
+          path: |
+            /opt/cargo/registry/
+            /opt/cargo/git/
+            target/
+      - run: cargo check -p server --all-targets
+      - run: cargo fmt -p server -- --check
+      - run: cargo clippy -p server --all-targets --message-format=json -- -D warnings > clippy.json
+      - name: Convert Clippy report
+        if: ${{ !cancelled() && hashFiles('clippy.json') != '' }}
+        run: gitlab-clippy < clippy.json > gl-code-quality-report.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: code-quality-report
+          path: gl-code-quality-report.json
+  units-test:
+    if: |
+      !(
+        github.ref_name == github.event.repository.default_branch &&
+        startsWith(github.event.head_commit.message, 'chore(release)')
+      )
+    name: units-test:${{ matrix.component }}
+    runs-on: ubuntu-latest
+    container: xataze/roms-store-builder:latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
+        with:
+          key: cargo-${{ runner.os }}-test-server-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            cargo-${{ runner.os }}-test-server-${{ hashFiles('Cargo.lock') }}-
+            cargo-${{ runner.os }}-test-server-
+          path: |
+            /opt/cargo/registry/
+            /opt/cargo/git/
+            target/
+      - run: cargo nextest run -p "romstore-server" --profile ci --config-file nextest.toml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: junit-server
+          path: target/nextest/ci/junit.xml
