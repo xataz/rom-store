@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      builds:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build:${{ matrix.component }}:${{ matrix.target }}
+    runs-on: ubuntu-latest
+    container: xataze/roms-store-builder:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.builds) }}
+    env:
+      RELEASE_NAME: ${{ matrix.component }}
+      RELEASE_TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          key: cargo-${{ runner.os }}-build-${{ matrix.component }}-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            cargo-${{ runner.os }}-build-${{ matrix.component }}-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}-
+            cargo-${{ runner.os }}-build-${{ matrix.component }}-${{ matrix.target }}-
+          path: |
+            /opt/cargo/registry/
+            /opt/cargo/git/
+            target/
+      - run: cargo build -p "romstore-${RELEASE_NAME}" --release --target "${RELEASE_TARGET}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: romstore-${{ matrix.component }}-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/romstore-${{ matrix.component }}${{ matrix.target == 'x86_64-pc-windows-gnu' && '.exe' || '' }}
+          if-no-files-found: error
