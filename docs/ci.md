@@ -1,6 +1,9 @@
 # CI/CD GitLab
 
-La configuration [`.gitlab-ci.yml`](../.gitlab-ci.yml) cible **Linux x86_64**,
+> Documentation historique de l'ancienne CI GitLab. La configuration active et la
+> procédure de release sont décrites dans [CI/CD GitHub Actions](github-actions.md).
+
+L'ancienne configuration GitLab ciblait **Linux x86_64**,
 sans compilation croisée.
 
 ## Préparer GitLab et le runner

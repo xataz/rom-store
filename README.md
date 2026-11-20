@@ -596,15 +596,14 @@ La commande publie le nouvel index en une transaction SQLite et affiche les anom
 
 ## Tests et qualité
 
-Le pipeline **GitLab CI/CD** teste et compile les deux applications
-sur Linux x86_64. Les tags `client-vX.Y.Z` et `server-vX.Y.Z` compilent, testent et
-publient indépendamment le composant concerné avec son archive et sa somme SHA-256.
-Les versions des deux applications peuvent différer. Sur `main`, une pipeline enfant
-propose les jobs manuels `fix`, `minor` et `major` pour chaque composant modifié
-depuis son dernier tag (trois à six jobs), afin de préparer et pousser la release
-directement depuis GitLab. Le client affiche sa version
+La CI **GitHub Actions** vérifie, teste et compile les composants modifiés :
+client et serveur Linux x86_64, et client Windows x86_64.
+Le workflow manuel **Release**, limité à la branche par défaut, permet de choisir
+le composant et l'incrément `patch`, `minor` ou `major`, puis prépare et pousse
+le commit de version et le tag après réussite des vérifications.
+Le client affiche sa version
 dans un petit encadré de l'en-tête, automatiquement issu de son `Cargo.toml`.
-Voir [la configuration du runner et la procédure de release](docs/ci.md).
+Voir [la configuration GitHub Actions et la procédure de release](docs/github-actions.md).
 
 ```bash
 cargo test --locked --manifest-path server/Cargo.toml
@@ -628,8 +627,8 @@ Ces tests créent leurs propres bibliothèques synthétiques, sans dépendre de
 l'ancien serveur vérifie la compatibilité des identifiants et révisions ; un cas à
 10 050 entrées vérifie pagination et cache à chaud.
 
-La CI et les releases n'utilisent pas Python : `cargo-release` prépare les versions,
-`git-cliff` génère les notes et GitLab publie les archives. `make release-tools`
+La CI et les releases n'utilisent pas Python : `cargo-release` prépare les versions.
+Le workflow ne publie pas d'archives ni de notes de release. `make release-tools`
 installe les outils épinglés ; `make release-client TYPE=fix|minor|major` et
 `make release-server TYPE=fix|minor|major` préparent le commit et le tag sans push.
 `make test-ci` teste les scripts Bash associés. Python reste nécessaire uniquement
